@@ -1,83 +1,156 @@
--- [[ STEAL A EGG HUB v20 ]] --
--- Auto Farm configuravel | SEM Anti-AFK | SEM Anti-Taco
+-- [[ STEAL A EGG HUB v21 ]] --
+-- Fix: executa sem erro | Auto Farm | sem Anti-AFK
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local LP = Players.LocalPlayer
 
--- ==================== CONFIG AUTO FARM ====================
 local Farm = {
     Enabled = false,
-    Area = "Ocean",          -- area alvo
-    DelayGo = 0.8,           -- espera depois de chegar no ovo
-    DelayBack = 1.0,         -- espera depois de voltar na base
+    Area = "Ocean",
+    DelayGo = 0.8,
+    DelayBack = 1.0,
     HopStuds = 12,
     HopDelay = 0.02,
-    OnlyRare = false,        -- true = so mythic/secret
-}
-
-local Areas = {
-    "Forest", "Lake", "Desert", "Jungle", "Snow", "Volcano",
-    "Ocean", "Prehistoric", "Cosmic", "Cherry", "Titan", "Monkey", "Angels",
+    OnlyRare = false,
+    Speed = false,
+    SpeedVal = 50,
 }
 
 local RareWords = {"mythic", "mitico", "secret", "secreto", "divine", "legendary", "eternal"}
 
--- carrega hub base (UI antiga) em paralelo, opcional
+local function notify(msg)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Egg Hub v21",
+            Text = tostring(msg),
+            Duration = 3,
+        })
+    end)
+end
+
+local function getChar()
+    return LP.Character
+end
+
+local function getRoot()
+    local c = getChar()
+    return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local function getHum()
+    local c = getChar()
+    return c and c:FindFirstChildOfClass("Humanoid")
+end
+
+local function nameHas(s, n)
+    return string.find(string.lower(tostring(s or "")), string.lower(tostring(n or "")), 1, true) ~= nil
+end
+
+-- GUI parent seguro
+local guiParent = LP:FindFirstChild("PlayerGui")
+if not guiParent then
+    pcall(function()
+        guiParent = LP:WaitForChild("PlayerGui", 3)
+    end)
+end
+if not guiParent then
+    guiParent = game:GetService("CoreGui")
+end
+
+-- limpa GUI antiga
 pcall(function()
-    local src = game:HttpGet("https://raw.githubusercontent.com/tsddev016/Steal-a-Egg-Hub/2e502fb766cab88e6f7d16d8201f7302b88a5624/StealEggHub.lua")
-    src = src:gsub("HopStuds = 40", "HopStuds = 12")
-    src = src:gsub("HopDelay = 0%.08", "HopDelay = 0.02")
-    src = src:gsub("root%.Size = Vector3%.new%(0%.4, 0%.4, 0%.4%)", "return")
-    src = src:gsub("applyHitbox%(char, true%)", "-- no")
-    src = src:gsub("applyHitbox%(getChar%(%), true%)", "-- no")
-    local fn = loadstring(src)
-    if fn then fn() end
+    local old = guiParent:FindFirstChild("EggAutoFarm")
+    if old then old:Destroy() end
+    local old2 = game:GetService("CoreGui"):FindFirstChild("EggAutoFarm")
+    if old2 then old2:Destroy() end
 end)
 
--- ==================== GUI AUTO FARM ====================
 local SG = Instance.new("ScreenGui")
 SG.Name = "EggAutoFarm"
 SG.ResetOnSpawn = false
-SG.Parent = (LP:FindFirstChild("PlayerGui") or game:GetService("CoreGui"))
+SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+SG.Parent = guiParent
 
-local Main = Instance.new("Frame", SG)
-Main.Size = UDim2.new(0, 280, 0, 320)
-Main.Position = UDim2.new(0, 20, 0.5, -160)
-Main.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+local Main = Instance.new("Frame")
+Main.Size = UDim2.new(0, 290, 0, 380)
+Main.Position = UDim2.new(0, 24, 0.35, 0)
+Main.BackgroundColor3 = Color3.fromRGB(16, 16, 16)
 Main.BorderSizePixel = 0
 Main.Active = true
+Main.Parent = SG
 Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
 
+local Stroke = Instance.new("UIStroke", Main)
+Stroke.Thickness = 1
+Stroke.Color = Color3.fromRGB(60, 60, 60)
+
 local Title = Instance.new("TextLabel", Main)
-Title.Size = UDim2.new(1, -16, 0, 32)
-Title.Position = UDim2.new(0, 10, 0, 4)
+Title.Size = UDim2.new(1, -50, 0, 34)
+Title.Position = UDim2.new(0, 12, 0, 4)
 Title.BackgroundTransparency = 1
-Title.Text = "AUTO FARM - Config"
+Title.Text = "STEAL EGG - Auto Farm v21"
 Title.Font = Enum.Font.GothamBold
-Title.TextSize = 15
+Title.TextSize = 14
 Title.TextColor3 = Color3.new(1, 1, 1)
 Title.TextXAlignment = Enum.TextXAlignment.Left
 
-local function label(y, text)
+local Close = Instance.new("TextButton", Main)
+Close.Size = UDim2.new(0, 28, 0, 28)
+Close.Position = UDim2.new(1, -34, 0, 6)
+Close.BackgroundColor3 = Color3.fromRGB(45, 30, 30)
+Close.Text = "X"
+Close.Font = Enum.Font.GothamBold
+Close.TextSize = 12
+Close.TextColor3 = Color3.fromRGB(255, 100, 100)
+Instance.new("UICorner", Close).CornerRadius = UDim.new(0, 6)
+Close.MouseButton1Click:Connect(function()
+    Farm.Enabled = false
+    SG:Destroy()
+end)
+
+-- drag
+do
+    local dragging, dragStart, startPos
+    Title.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = Main.Position
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                end
+            end)
+        end
+    end)
+    UIS.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local d = input.Position - dragStart
+            Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        end
+    end)
+end
+
+local function makeLabel(y, text)
     local l = Instance.new("TextLabel", Main)
-    l.Size = UDim2.new(1, -20, 0, 18)
-    l.Position = UDim2.new(0, 10, 0, y)
+    l.Size = UDim2.new(1, -24, 0, 16)
+    l.Position = UDim2.new(0, 12, 0, y)
     l.BackgroundTransparency = 1
     l.Text = text
     l.Font = Enum.Font.Gotham
-    l.TextSize = 12
-    l.TextColor3 = Color3.fromRGB(180, 180, 180)
+    l.TextSize = 11
+    l.TextColor3 = Color3.fromRGB(170, 170, 170)
     l.TextXAlignment = Enum.TextXAlignment.Left
     return l
 end
 
-local function box(y, val)
+local function makeBox(y, val)
     local t = Instance.new("TextBox", Main)
-    t.Size = UDim2.new(1, -20, 0, 28)
-    t.Position = UDim2.new(0, 10, 0, y)
-    t.BackgroundColor3 = Color3.fromRGB(32, 32, 32)
+    t.Size = UDim2.new(1, -24, 0, 28)
+    t.Position = UDim2.new(0, 12, 0, y)
+    t.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
     t.Text = tostring(val)
     t.Font = Enum.Font.Gotham
     t.TextSize = 13
@@ -87,43 +160,48 @@ local function box(y, val)
     return t
 end
 
-label(40, "Area (Forest, Ocean, Angels...)")
-local AreaBox = box(58, Farm.Area)
+local function makeBtn(y, text, color)
+    local b = Instance.new("TextButton", Main)
+    b.Size = UDim2.new(1, -24, 0, 30)
+    b.Position = UDim2.new(0, 12, 0, y)
+    b.BackgroundColor3 = color or Color3.fromRGB(40, 40, 50)
+    b.Text = text
+    b.Font = Enum.Font.GothamBold
+    b.TextSize = 12
+    b.TextColor3 = Color3.new(1, 1, 1)
+    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+    return b
+end
 
-label(92, "Delay no ovo (segundos)")
-local DelayGoBox = box(110, Farm.DelayGo)
+makeLabel(40, "Area (Ocean, Forest, Angels...)")
+local AreaBox = makeBox(56, Farm.Area)
 
-label(144, "Delay na base (segundos)")
-local DelayBackBox = box(162, Farm.DelayBack)
+makeLabel(90, "Delay no ovo (s)")
+local DelayGoBox = makeBox(106, Farm.DelayGo)
 
-local OnlyRareBtn = Instance.new("TextButton", Main)
-OnlyRareBtn.Size = UDim2.new(1, -20, 0, 28)
-OnlyRareBtn.Position = UDim2.new(0, 10, 0, 198)
-OnlyRareBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
-OnlyRareBtn.Text = "So Mythic/Secret: OFF"
-OnlyRareBtn.Font = Enum.Font.GothamBold
-OnlyRareBtn.TextSize = 12
-OnlyRareBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-Instance.new("UICorner", OnlyRareBtn).CornerRadius = UDim.new(0, 6)
+makeLabel(140, "Delay na base (s)")
+local DelayBackBox = makeBox(156, Farm.DelayBack)
 
-local FarmBtn = Instance.new("TextButton", Main)
-FarmBtn.Size = UDim2.new(1, -20, 0, 36)
-FarmBtn.Position = UDim2.new(0, 10, 0, 236)
-FarmBtn.BackgroundColor3 = Color3.fromRGB(40, 70, 40)
-FarmBtn.Text = "AUTO FARM: OFF"
-FarmBtn.Font = Enum.Font.GothamBold
-FarmBtn.TextSize = 14
+makeLabel(190, "Velocidade WalkSpeed")
+local SpeedBox = makeBox(206, Farm.SpeedVal)
+
+local SpeedBtn = makeBtn(242, "Speed: OFF", Color3.fromRGB(40, 40, 40))
+SpeedBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+
+local RareBtn = makeBtn(278, "So Mythic/Secret: OFF", Color3.fromRGB(40, 40, 40))
+RareBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+
+local FarmBtn = makeBtn(314, "AUTO FARM: OFF", Color3.fromRGB(35, 55, 35))
 FarmBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-Instance.new("UICorner", FarmBtn).CornerRadius = UDim.new(0, 6)
 
 local Status = Instance.new("TextLabel", Main)
-Status.Size = UDim2.new(1, -20, 0, 28)
-Status.Position = UDim2.new(0, 10, 0, 280)
+Status.Size = UDim2.new(1, -24, 0, 24)
+Status.Position = UDim2.new(0, 12, 0, 350)
 Status.BackgroundTransparency = 1
-Status.Text = "Salve a base andando nela e ligue o farm"
+Status.Text = "Pronto - fique na base e ligue o farm"
 Status.Font = Enum.Font.Gotham
 Status.TextSize = 11
-Status.TextColor3 = Color3.fromRGB(140, 140, 140)
+Status.TextColor3 = Color3.fromRGB(130, 130, 130)
 Status.TextWrapped = true
 
 local function setStatus(t)
@@ -131,46 +209,97 @@ local function setStatus(t)
 end
 
 AreaBox.FocusLost:Connect(function()
-    if AreaBox.Text ~= "" then Farm.Area = AreaBox.Text end
+    if AreaBox.Text ~= "" then
+        Farm.Area = AreaBox.Text
+        setStatus("Area: " .. Farm.Area)
+    end
 end)
+
 DelayGoBox.FocusLost:Connect(function()
     local v = tonumber(DelayGoBox.Text)
-    if v and v >= 0 then Farm.DelayGo = v else DelayGoBox.Text = tostring(Farm.DelayGo) end
+    if v and v >= 0 then
+        Farm.DelayGo = v
+    else
+        DelayGoBox.Text = tostring(Farm.DelayGo)
+    end
 end)
+
 DelayBackBox.FocusLost:Connect(function()
     local v = tonumber(DelayBackBox.Text)
-    if v and v >= 0 then Farm.DelayBack = v else DelayBackBox.Text = tostring(Farm.DelayBack) end
+    if v and v >= 0 then
+        Farm.DelayBack = v
+    else
+        DelayBackBox.Text = tostring(Farm.DelayBack)
+    end
 end)
 
-OnlyRareBtn.MouseButton1Click:Connect(function()
+SpeedBox.FocusLost:Connect(function()
+    local v = tonumber(SpeedBox.Text)
+    if v and v > 0 then
+        Farm.SpeedVal = v
+    else
+        SpeedBox.Text = tostring(Farm.SpeedVal)
+    end
+end)
+
+local speedConn = nil
+SpeedBtn.MouseButton1Click:Connect(function()
+    Farm.Speed = not Farm.Speed
+    if Farm.Speed then
+        SpeedBtn.Text = "Speed: ON"
+        SpeedBtn.TextColor3 = Color3.fromRGB(100, 255, 120)
+        if speedConn then speedConn:Disconnect() end
+        speedConn = RunService.Heartbeat:Connect(function()
+            local h = getHum()
+            if h then
+                h.WalkSpeed = Farm.SpeedVal
+            end
+        end)
+    else
+        SpeedBtn.Text = "Speed: OFF"
+        SpeedBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+        if speedConn then
+            speedConn:Disconnect()
+            speedConn = nil
+        end
+        local h = getHum()
+        if h then
+            h.WalkSpeed = 16
+        end
+    end
+end)
+
+RareBtn.MouseButton1Click:Connect(function()
     Farm.OnlyRare = not Farm.OnlyRare
-    OnlyRareBtn.Text = Farm.OnlyRare and "So Mythic/Secret: ON" or "So Mythic/Secret: OFF"
-    OnlyRareBtn.TextColor3 = Farm.OnlyRare and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(255, 100, 100)
+    if Farm.OnlyRare then
+        RareBtn.Text = "So Mythic/Secret: ON"
+        RareBtn.TextColor3 = Color3.fromRGB(100, 255, 120)
+    else
+        RareBtn.Text = "So Mythic/Secret: OFF"
+        RareBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
 end)
 
--- ==================== FARM LOGIC ====================
+-- farm logic
 local savedBase = nil
 local hopping = false
 
-local function getRoot()
-    local c = LP.Character
-    return c and c:FindFirstChild("HumanoidRootPart")
-end
-
-local function nameHas(s, n)
-    return string.find(string.lower(s or ""), string.lower(n or ""), 1, true) ~= nil
-end
-
 local function isRare(obj)
-    local blob = string.lower(obj.Name .. " " .. (obj:GetFullName() or ""))
-    for _, w in ipairs(RareWords) do
-        if blob:find(w, 1, true) then return true end
+    local blob = string.lower(tostring(obj.Name) .. " " .. tostring((pcall(function() return obj:GetFullName() end) and obj:GetFullName()) or ""))
+    for i = 1, #RareWords do
+        if string.find(blob, RareWords[i], 1, true) then
+            return true
+        end
     end
-    for _, a in ipairs({"Rarity", "EggRarity", "Tier"}) do
-        local v = obj:GetAttribute(a)
+    local attrs = {"Rarity", "EggRarity", "Tier"}
+    for i = 1, #attrs do
+        local v = obj:GetAttribute(attrs[i])
         if v then
-            for _, w in ipairs(RareWords) do
-                if string.lower(tostring(v)):find(w, 1, true) then return true end
+            local sv = string.lower(tostring(v))
+            for j = 1, #RareWords do
+                if string.find(sv, RareWords[j], 1, true) then
+                    return true
+                end
             end
         end
     end
@@ -179,41 +308,73 @@ end
 
 local function hopTo(pos)
     local root = getRoot()
-    if not root or not pos then return false end
+    if not root or not pos then
+        return false
+    end
     hopping = true
     local start = root.Position
     local dist = (pos - start).Magnitude
-    local steps = math.min(math.max(1, math.ceil(dist / Farm.HopStuds)), 100)
+    local steps = math.ceil(dist / Farm.HopStuds)
+    if steps < 1 then steps = 1 end
+    if steps > 100 then steps = 100 end
     for i = 1, steps do
-        if not Farm.Enabled and steps > 1 then break end
         root = getRoot()
-        if not root then hopping = false return false end
-        root.CFrame = CFrame.new(start:Lerp(pos, i / steps) + Vector3.new(0, 1, 0))
+        if not root then
+            hopping = false
+            return false
+        end
+        local alpha = i / steps
+        local p = start:Lerp(pos, alpha)
+        root.CFrame = CFrame.new(p + Vector3.new(0, 1, 0))
         root.AssemblyLinearVelocity = Vector3.zero
         task.wait(Farm.HopDelay)
     end
     root = getRoot()
-    if root then root.CFrame = CFrame.new(pos) end
+    if root then
+        root.CFrame = CFrame.new(pos)
+        root.AssemblyLinearVelocity = Vector3.zero
+    end
     hopping = false
     return true
 end
 
 local function findEgg()
     local root = getRoot()
-    local best, bestD = nil, math.huge
-    for _, obj in pairs(workspace:GetDescendants()) do
+    local best = nil
+    local bestScore = math.huge
+    local descendants = workspace:GetDescendants()
+    for i = 1, #descendants do
+        local obj = descendants[i]
         if nameHas(obj.Name, "egg") then
-            if Farm.OnlyRare and not isRare(obj) then continue end
-            local part = obj:IsA("BasePart") and obj
-                or (obj:IsA("Model") and (obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")))
-            if part then
-                local pathOk = nameHas(obj:GetFullName(), Farm.Area)
-                -- se nao achar na area, ainda considera (fallback)
-                local d = root and (root.Position - part.Position).Magnitude or 0
-                local score = pathOk and d or (d + 5000)
-                if score < bestD then
-                    bestD = score
-                    best = {pos = part.Position, obj = obj, part = part}
+            local rareOk = true
+            if Farm.OnlyRare then
+                rareOk = isRare(obj)
+            end
+            if rareOk then
+                local part = nil
+                if obj:IsA("BasePart") then
+                    part = obj
+                elseif obj:IsA("Model") then
+                    part = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
+                end
+                if part then
+                    local fullName = ""
+                    pcall(function()
+                        fullName = obj:GetFullName()
+                    end)
+                    local inArea = nameHas(fullName, Farm.Area) or nameHas(obj.Name, Farm.Area)
+                    local d = 0
+                    if root then
+                        d = (root.Position - part.Position).Magnitude
+                    end
+                    local score = d
+                    if not inArea then
+                        score = d + 5000
+                    end
+                    if score < bestScore then
+                        bestScore = score
+                        best = { pos = part.Position, obj = obj }
+                    end
                 end
             end
         end
@@ -223,93 +384,90 @@ end
 
 local function tryPrompt(obj)
     if not obj then return end
-    for _, d in pairs(obj:GetDescendants()) do
+    local ok, desc = pcall(function()
+        return obj:GetDescendants()
+    end)
+    if not ok or not desc then return end
+    for i = 1, #desc do
+        local d = desc[i]
         if d:IsA("ProximityPrompt") then
-            pcall(function() fireproximityprompt(d) end)
+            pcall(function()
+                if fireproximityprompt then
+                    fireproximityprompt(d)
+                end
+            end)
         end
     end
 end
-
--- salva base no start
-task.defer(function()
-    task.wait(1)
-    local r = getRoot()
-    if r then savedBase = r.Position setStatus("Base salva (posicao atual)") end
-end)
 
 local function farmLoop()
     while Farm.Enabled do
         if not savedBase then
             local r = getRoot()
-            if r then savedBase = r.Position end
+            if r then
+                savedBase = r.Position
+            end
         end
 
-        setStatus("Buscando ovo em " .. Farm.Area .. "...")
+        setStatus("Buscando ovo: " .. Farm.Area)
         local egg = findEgg()
         if egg then
             setStatus("Indo ao ovo...")
             hopTo(egg.pos + Vector3.new(0, 3, 0))
             tryPrompt(egg.obj)
-            setStatus("No ovo - esperando")
+            setStatus("Esperando no ovo")
             task.wait(Farm.DelayGo)
-
             if savedBase then
                 setStatus("Voltando base...")
                 hopTo(savedBase)
-                setStatus("Na base - ciclo OK")
+                setStatus("Ciclo OK - base")
                 task.wait(Farm.DelayBack)
             end
         else
-            setStatus("Nenhum ovo - retry")
+            setStatus("Sem ovo - tentando de novo")
             task.wait(2)
         end
-        task.wait(0.2)
+        task.wait(0.15)
     end
     setStatus("Auto Farm OFF")
 end
 
 FarmBtn.MouseButton1Click:Connect(function()
     Farm.Enabled = not Farm.Enabled
-    Farm.Area = AreaBox.Text ~= "" and AreaBox.Text or Farm.Area
-    FarmBtn.Text = Farm.Enabled and "AUTO FARM: ON" or "AUTO FARM: OFF"
-    FarmBtn.TextColor3 = Farm.Enabled and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(255, 100, 100)
+    if AreaBox.Text ~= "" then
+        Farm.Area = AreaBox.Text
+    end
     if Farm.Enabled then
+        FarmBtn.Text = "AUTO FARM: ON"
+        FarmBtn.TextColor3 = Color3.fromRGB(100, 255, 120)
         local r = getRoot()
-        if r and not savedBase then savedBase = r.Position end
-        setStatus("Farm ligado - " .. Farm.Area)
+        if r then
+            savedBase = r.Position
+        end
+        setStatus("Farm ON - " .. Farm.Area)
         task.spawn(farmLoop)
     else
-        setStatus("Farm desligado")
+        FarmBtn.Text = "AUTO FARM: OFF"
+        FarmBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+        setStatus("Farm OFF")
     end
 end)
 
--- arrastar painel
-do
-    local drag, start, pos
-    Title.InputBegan:Connect(function(i)
-        if i.UserInputType == Enum.UserInputType.MouseButton1 then
-            drag = true
-            start = i.Position
-            pos = Main.Position
-            i.Changed:Connect(function()
-                if i.UserInputState == Enum.UserInputState.End then drag = false end
-            end)
-        end
-    end)
-    UIS.InputChanged:Connect(function(i)
-        if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
-            local d = i.Position - start
-            Main.Position = UDim2.new(pos.X.Scale, pos.X.Offset + d.X, pos.Y.Scale, pos.Y.Offset + d.Y)
-        end
-    end)
-end
-
-UIS.InputBegan:Connect(function(i, g)
-    if g then return end
-    if i.KeyCode == Enum.KeyCode.RightControl then
+UIS.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.RightControl then
         Main.Visible = not Main.Visible
     end
 end)
 
-print("[EggHub v20] Auto Farm config pronta")
-setStatus("Configure area/delays e ligue o farm")
+task.defer(function()
+    task.wait(0.3)
+    local r = getRoot()
+    if r then
+        savedBase = r.Position
+        setStatus("Base salva - ligue o Auto Farm")
+    end
+    notify("v21 OK - script executou")
+end)
+
+print("[StealEggHub v21] executou com sucesso")
