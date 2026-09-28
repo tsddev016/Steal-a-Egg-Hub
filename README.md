@@ -4,26 +4,22 @@ Script para **Steal a Egg** (Roblox).
 
 ## Features
 
-- **Velocidade** — loop constante (o jogo não consegue resetar fácil)
-- **Fly** — teleporte suave por CFrame (sem BodyVelocity, menos chance de kill)
+- **Velocidade** — loop constante
+- **Fly (Swim)** — servidor vê como se o player estivesse **nadando**
 - **ESP Visual**
-- **Anti-Taco**
-  - Anti-ragdoll sem deixar lento
-  - Intangível (CanCollide off)
-  - Hitbox menor (bicho/NPC tem mais dificuldade de acertar)
-- **Fling** — empurra players ao encostar
+- **Anti-Taco** — anti-ragdoll + hitbox menor + intangível
+- **Fling**
+
+## Fly (modo nadar)
+
+Em vez de BodyVelocity/voar normal, o script força o estado **Swimming** do Humanoid.
+Pro servidor parece que você está nadando — não voando.
+
+Controles: **WASD** + **Space** (sobe) + **LeftShift** (desce)
 
 ## Como usar
 
-1. Executor → cola o `StealEggHub.lua` → executa
+1. Executor → cola `StealEggHub.lua` → executa
 2. `RightControl` abre/fecha a GUI
-
-## Controles do Fly
-
-- **WASD** = move
-- **Space** = sobe
-- **LeftShift** = desce
-
-## Aviso
 
 Use por sua conta e risco.

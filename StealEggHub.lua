@@ -1,5 +1,5 @@
--- [[ STEAL A EGG HUB v3 ]] --
--- Fix: Speed loop | Fly CFrame (sem BodyVelocity) | Anti-Taco sem lag | Hitbox menor | Fling
+-- [[ STEAL A EGG HUB v4 ]] --
+-- Fly = estado Swimming (servidor ve como nadando)
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -12,7 +12,7 @@ local Config = {
     Speed = false,
     SpeedVal = 45,
     Fly = false,
-    FlySpeed = 2.2, -- studs por frame (teleporte suave)
+    FlySpeed = 50, -- velocidade no modo swim
     ESP = false,
     AntiTaco = false,
     Fling = false,
@@ -41,7 +41,7 @@ Stroke.Thickness = 2
 local Title = Instance.new("TextLabel", Main)
 Title.Size = UDim2.new(1, 0, 0, 40)
 Title.BackgroundTransparency = 1
-Title.Text = "♡ STEAL A EGG HUB v3 ♡"
+Title.Text = "♡ STEAL A EGG HUB v4 ♡"
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 16
 Title.TextColor3 = Color3.new(1, 1, 1)
@@ -109,14 +109,13 @@ local function setBtn(b, on)
     b.TextColor3 = on and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(255, 100, 100)
 end
 
--- Sections
 local S1 = section(48, 72, "Velocidade")
 local SpeedBtn = toggle(S1, 5)
 local SpeedBox = box(S1, Config.SpeedVal, "Ex: 45", 36)
 
-local S2 = section(128, 72, "Fly (teleporte suave)")
+local S2 = section(128, 72, "Fly (modo nadar)")
 local FlyBtn = toggle(S2, 5)
-local FlyBox = box(S2, Config.FlySpeed, "Velocidade fly (1 a 5)", 36)
+local FlyBox = box(S2, Config.FlySpeed, "Velocidade swim (ex: 50)", 36)
 
 local S3 = section(208, 48, "ESP Visual")
 local ESPBtn = toggle(S3, 13)
@@ -128,10 +127,10 @@ local S5 = section(320, 48, "Fling")
 local FlingBtn = toggle(S5, 13)
 
 local Tip = Instance.new("TextLabel", Main)
-Tip.Size = UDim2.new(1, -20, 0, 50)
-Tip.Position = UDim2.new(0, 10, 0, 380)
+Tip.Size = UDim2.new(1, -20, 0, 55)
+Tip.Position = UDim2.new(0, 10, 0, 378)
 Tip.BackgroundTransparency = 1
-Tip.Text = "Fly = WASD + Space/Shift\nAnti-Taco = intangivel + hitbox pequena\nRightControl = abrir/fechar"
+Tip.Text = "Fly = estado Swimming (parece nadar)\nWASD + Space/Shift\nRightControl = abrir/fechar"
 Tip.Font = Enum.Font.Gotham
 Tip.TextSize = 11
 Tip.TextColor3 = Color3.fromRGB(160, 160, 160)
@@ -141,7 +140,7 @@ local Foot = Instance.new("TextLabel", Main)
 Foot.Size = UDim2.new(1, 0, 0, 24)
 Foot.Position = UDim2.new(0, 0, 1, -28)
 Foot.BackgroundTransparency = 1
-Foot.Text = "v3 • RightControl"
+Foot.Text = "v4 • Swim Fly • RightControl"
 Foot.Font = Enum.Font.Gotham
 Foot.TextSize = 11
 Foot.TextColor3 = Color3.fromRGB(120, 120, 120)
@@ -152,26 +151,14 @@ RunService.RenderStepped:Connect(function()
     Title.TextColor3 = c
 end)
 
--- ==================== HELPERS ====================
-local function getChar()
-    return LP.Character
-end
+local function getChar() return LP.Character end
+local function getHum(c) return c and c:FindFirstChildOfClass("Humanoid") end
+local function getRoot(c) return c and c:FindFirstChild("HumanoidRootPart") end
 
-local function getHum(char)
-    return char and char:FindFirstChildOfClass("Humanoid")
-end
-
-local function getRoot(char)
-    return char and char:FindFirstChild("HumanoidRootPart")
-end
-
--- ==================== SPEED (loop constante) ====================
--- Muitos jogos resetam WalkSpeed todo frame. Por isso o loop.
-
+-- ==================== SPEED ====================
 RunService.Heartbeat:Connect(function()
     if not Config.Speed then return end
-    local char = getChar()
-    local hum = getHum(char)
+    local hum = getHum(getChar())
     if hum and hum.WalkSpeed ~= Config.SpeedVal then
         hum.WalkSpeed = Config.SpeedVal
     end
@@ -181,9 +168,7 @@ SpeedBtn.MouseButton1Click:Connect(function()
     Config.Speed = not Config.Speed
     setBtn(SpeedBtn, Config.Speed)
     local hum = getHum(getChar())
-    if hum then
-        hum.WalkSpeed = Config.Speed and Config.SpeedVal or 16
-    end
+    if hum then hum.WalkSpeed = Config.Speed and Config.SpeedVal or 16 end
 end)
 
 SpeedBox.FocusLost:Connect(function()
@@ -196,36 +181,88 @@ SpeedBox.FocusLost:Connect(function()
     end
 end)
 
--- ==================== FLY (CFrame teleport suave) ====================
--- SEM BodyVelocity / BodyGyro / PlatformStand
--- Só move o HumanoidRootPart com CFrame (bem menos chance de kill)
+-- ==================== FLY = SWIMMING ====================
+-- Força HumanoidStateType.Swimming
+-- O servidor interpreta como nadando, não como fly
+-- Move com velocity controlada enquanto o estado é Swimming
+
+local swimBV = nil
+
+local function startSwim()
+    local char = getChar()
+    local root = getRoot(char)
+    local hum = getHum(char)
+    if not root or not hum then return end
+
+    -- Força estado de natação
+    pcall(function()
+        hum:ChangeState(Enum.HumanoidStateType.Swimming)
+        hum:SetStateEnabled(Enum.HumanoidStateType.Swimming, true)
+    end)
+
+    -- BodyVelocity só pra controlar a direção enquanto "nada"
+    -- Força moderada (não infinita) pra parecer movimento de swim
+    if swimBV then swimBV:Destroy() end
+    swimBV = Instance.new("BodyVelocity")
+    swimBV.Name = "SwimMove"
+    swimBV.MaxForce = Vector3.new(12000, 12000, 12000)
+    swimBV.P = 1000
+    swimBV.Velocity = Vector3.zero
+    swimBV.Parent = root
+end
+
+local function stopSwim()
+    if swimBV then
+        swimBV:Destroy()
+        swimBV = nil
+    end
+    local char = getChar()
+    local hum = getHum(char)
+    if hum then
+        pcall(function()
+            hum:ChangeState(Enum.HumanoidStateType.Running)
+        end)
+    end
+end
 
 FlyBtn.MouseButton1Click:Connect(function()
     Config.Fly = not Config.Fly
     setBtn(FlyBtn, Config.Fly)
+    if Config.Fly then
+        startSwim()
+    else
+        stopSwim()
+    end
 end)
 
 FlyBox.FocusLost:Connect(function()
     local v = tonumber(FlyBox.Text)
     if v and v > 0 then
-        Config.FlySpeed = math.clamp(v, 0.5, 8)
+        Config.FlySpeed = math.clamp(v, 10, 120)
         FlyBox.Text = tostring(Config.FlySpeed)
     else
         FlyBox.Text = tostring(Config.FlySpeed)
     end
 end)
 
-RunService.RenderStepped:Connect(function()
+RunService.Heartbeat:Connect(function()
     if not Config.Fly then return end
+
     local char = getChar()
     local root = getRoot(char)
     local hum = getHum(char)
     if not root or not hum then return end
 
-    -- Cancela ragdoll sem travar velocidade
-    if hum:GetState() == Enum.HumanoidStateType.Ragdoll
-        or hum:GetState() == Enum.HumanoidStateType.FallingDown then
-        hum:ChangeState(Enum.HumanoidStateType.Running)
+    -- Mantém o estado Swimming o tempo todo
+    if hum:GetState() ~= Enum.HumanoidStateType.Swimming then
+        pcall(function()
+            hum:ChangeState(Enum.HumanoidStateType.Swimming)
+        end)
+    end
+
+    -- Garante que o BV existe
+    if not swimBV or not swimBV.Parent then
+        startSwim()
     end
 
     local cam = workspace.CurrentCamera
@@ -240,18 +277,14 @@ RunService.RenderStepped:Connect(function()
 
     if dir.Magnitude > 0 then
         dir = dir.Unit * Config.FlySpeed
-        -- Teleporte suave (CFrame) — não usa velocidade física
-        root.CFrame = root.CFrame + dir
-        -- Zera velocity pra não acumular e o jogo matar
-        root.AssemblyLinearVelocity = Vector3.zero
-        root.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    if swimBV then
+        swimBV.Velocity = dir
     end
 end)
 
--- ==================== ANTI-TACO + HITBOX MENOR ====================
--- Não usa loop pesado de velocity clamp (isso deixava lento)
--- Só: CanCollide off + estados de ragdoll desligados + hitbox pequena
-
+-- ==================== ANTI-TACO + HITBOX ====================
 local originalSizes = {}
 local antiConn
 
@@ -263,8 +296,7 @@ local function applyHitbox(char, small)
         if not originalSizes[root] then
             originalSizes[root] = root.Size
         end
-        -- Hitbox bem menor (bicho/NPC erra mais)
-        root.Size = Vector3.new(0.5, 0.5, 0.5)
+        root.Size = Vector3.new(0.4, 0.4, 0.4)
         root.Transparency = 1
         root.CanCollide = false
     else
@@ -305,21 +337,24 @@ local function enableAnti()
         if not c or not h or not r then return end
 
         local st = h:GetState()
+        -- Não interfere no Swimming (fly)
         if st == Enum.HumanoidStateType.Ragdoll
             or st == Enum.HumanoidStateType.FallingDown
             or st == Enum.HumanoidStateType.Physics then
-            h:ChangeState(Enum.HumanoidStateType.Running)
+            if Config.Fly then
+                h:ChangeState(Enum.HumanoidStateType.Swimming)
+            else
+                h:ChangeState(Enum.HumanoidStateType.Running)
+            end
             h.PlatformStand = false
             h.Sit = false
         end
 
-        -- Só corta velocity absurda (taco forte), sem deixar lento
         local vel = r.AssemblyLinearVelocity
-        if vel.Magnitude > 120 then
-            r.AssemblyLinearVelocity = vel.Unit * 40
+        if vel.Magnitude > 130 then
+            r.AssemblyLinearVelocity = vel.Unit * 45
         end
 
-        -- Reaplica intangibilidade (alguns jogos religam CanCollide)
         if r.CanCollide then
             applyHitbox(c, true)
         end
@@ -327,10 +362,7 @@ local function enableAnti()
 end
 
 local function disableAnti()
-    if antiConn then
-        antiConn:Disconnect()
-        antiConn = nil
-    end
+    if antiConn then antiConn:Disconnect() antiConn = nil end
     local char = getChar()
     if not char then return end
     local hum = getHum(char)
@@ -347,19 +379,17 @@ end
 AntiBtn.MouseButton1Click:Connect(function()
     Config.AntiTaco = not Config.AntiTaco
     setBtn(AntiBtn, Config.AntiTaco)
-    if Config.AntiTaco then
-        enableAnti()
-    else
-        disableAnti()
-    end
+    if Config.AntiTaco then enableAnti() else disableAnti() end
 end)
 
--- Reaplica no respawn
 LP.CharacterAdded:Connect(function()
     task.wait(0.5)
     if Config.Speed then
         local hum = getHum(getChar())
         if hum then hum.WalkSpeed = Config.SpeedVal end
+    end
+    if Config.Fly then
+        startSwim()
     end
     if Config.AntiTaco then
         enableAnti()
@@ -373,8 +403,7 @@ local function enableFling()
     if flingConn then flingConn:Disconnect() end
     flingConn = RunService.Heartbeat:Connect(function()
         if not Config.Fling then return end
-        local char = getChar()
-        local root = getRoot(char)
+        local root = getRoot(getChar())
         if not root then return end
 
         for _, plr in pairs(Players:GetPlayers()) do
@@ -385,19 +414,16 @@ local function enableFling()
                     if dir.Magnitude < 0.1 then dir = Vector3.new(0, 1, 0) end
                     dir = dir.Unit
 
-                    -- Método 1: velocity direta
                     pcall(function()
                         oRoot.AssemblyLinearVelocity = (dir + Vector3.new(0, 1.2, 0)).Unit * 180
                     end)
 
-                    -- Método 2: BodyVelocity temporário
                     local bv = Instance.new("BodyVelocity")
                     bv.MaxForce = Vector3.new(1e6, 1e6, 1e6)
                     bv.Velocity = (dir + Vector3.new(0, 1, 0)).Unit * 160
                     bv.Parent = oRoot
                     Debris:AddItem(bv, 0.2)
 
-                    -- Método 3: Angular (gira + joga)
                     pcall(function()
                         oRoot.AssemblyAngularVelocity = Vector3.new(40, 40, 40)
                     end)
@@ -504,9 +530,7 @@ end)
 
 Players.PlayerRemoving:Connect(function(p)
     for _, o in pairs(ESPFolder:GetChildren()) do
-        if o.Name == p.Name or o.Name == p.Name .. "_bb" then
-            o:Destroy()
-        end
+        if o.Name == p.Name or o.Name == p.Name .. "_bb" then o:Destroy() end
     end
 end)
 
@@ -519,7 +543,6 @@ for _, p in pairs(Players:GetPlayers()) do
     end
 end
 
--- UI toggle
 UIS.InputBegan:Connect(function(inp, gpe)
     if gpe then return end
     if inp.KeyCode == Enum.KeyCode.RightControl then
@@ -527,5 +550,5 @@ UIS.InputBegan:Connect(function(inp, gpe)
     end
 end)
 
-print("[StealEggHub v3] carregado")
-print("Speed loop | Fly CFrame | Anti-Taco + hitbox | Fling | ESP")
+print("[StealEggHub v4] Swim Fly ativo")
+print("Fly agora usa HumanoidStateType.Swimming")
