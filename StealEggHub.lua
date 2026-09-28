@@ -1,5 +1,5 @@
--- [[ STEAL A EGG HUB v16 ]] --
--- SEM Anti-Taco | TP curto | Anti-AFK | Auto voltar base
+-- [[ STEAL A EGG HUB v17 ]] --
+-- TP leve ~12 studs / 0.02s | SEM Anti-Taco | Anti-AFK
 
 local Players = game:GetService("Players")
 local VirtualUser = game:GetService("VirtualUser")
@@ -27,38 +27,21 @@ print("[StealEggHub] Anti-AFK ON")
 local ok, err = pcall(function()
     local src = game:HttpGet("https://raw.githubusercontent.com/tsddev016/Steal-a-Egg-Hub/2e502fb766cab88e6f7d16d8201f7302b88a5624/StealEggHub.lua")
 
-    -- TP curto e rapido
-    src = src:gsub("HopStuds = 40", "HopStuds = 5")
-    src = src:gsub("HopDelay = 0%.08", "HopDelay = 0.008")
+    -- TP LEVE: ~12 studs (entre 10 e 15), delay 0.02s (~20ms)
+    src = src:gsub("HopStuds = 40", "HopStuds = 12")
+    src = src:gsub("HopDelay = 0%.08", "HopDelay = 0.02")
     src = src:gsub(
         "math%.min%(math%.max%(1, math%.ceil%(dist / step%)%), 60%)",
-        "math.min(math.max(1, math.ceil(dist / step)), 300)"
+        "math.min(math.max(1, math.ceil(dist / step)), 120)"
     )
 
-    -- ========== REMOVE ANTI-TACO ========== --
-    -- desliga flag
-    src = src:gsub("AntiTaco = false", "AntiTaco = false -- DESATIVADO")
-    -- aplica hitbox nao faz nada
-    src = src:gsub("root%.Size = Vector3%.new%(0%.4, 0%.4, 0%.4%)", "return -- anti-taco removido")
-    src = src:gsub("root%.Transparency = 1", "-- removed")
-    src = src:gsub("root%.CanCollide = false", "-- removed")
-    -- enableAnti vira so anti-ragdoll leve (sem hitbox/colisao)
-    src = src:gsub(
-        "applyHitbox%(char, true%)",
-        "-- applyHitbox removido"
-    )
-    src = src:gsub(
-        "applyHitbox%(getChar%(%), true%)",
-        "-- applyHitbox removido"
-    )
-    src = src:gsub(
-        "applyHitbox%(char, false%)",
-        "-- applyHitbox removido"
-    )
-    src = src:gsub(
-        "applyHitbox%(getChar%(%), false%)",
-        "-- applyHitbox removido"
-    )
+    -- Remove efeitos do Anti-Taco (hitbox/colisao)
+    src = src:gsub("root%.Size = Vector3%.new%(0%.4, 0%.4, 0%.4%)", "return")
+    src = src:gsub("root%.CanCollide = false", "-- no")
+    src = src:gsub("applyHitbox%(char, true%)", "-- no")
+    src = src:gsub("applyHitbox%(getChar%(%), true%)", "-- no")
+    src = src:gsub("applyHitbox%(char, false%)", "-- no")
+    src = src:gsub("applyHitbox%(getChar%(%), false%)", "-- no")
 
     local fn, e = loadstring(src)
     if not fn then error(e or "loadstring") end
@@ -68,10 +51,10 @@ end)
 if not ok then
     warn("[StealEggHub]", err)
 else
-    print("[StealEggHub v16] SEM Anti-Taco")
+    print("[StealEggHub v17] TP 12 studs / 0.02s")
 end
 
--- Esconde/desativa botao AntiTaco na GUI
+-- Esconde botao AntiTaco
 task.spawn(function()
     task.wait(2)
     local sg = game:GetService("CoreGui"):FindFirstChild("StealEggHub")
@@ -79,35 +62,29 @@ task.spawn(function()
     for _, b in pairs(sg:GetDescendants()) do
         if b:IsA("TextButton") then
             local t = string.lower(b.Text or "")
-            if t:find("antitaco") or t:find("anti taco") or t:find("anti%-taco") then
+            if t:find("antitaco") or t:find("anti taco") then
                 b.Visible = false
                 b.Active = false
-                b.Text = "(removido)"
             end
         end
     end
 end)
 
--- Anti-ragdoll LEVE (sem mexer em colisao / tamanho)
-local antiRagdoll = true
+-- Anti-ragdoll leve (sem colisao/hitbox)
 RunService.Heartbeat:Connect(function()
-    if not antiRagdoll then return end
     local char = LP.Character
     if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hum then return end
     if hum.PlatformStand then hum.PlatformStand = false end
     local st = hum:GetState()
-    if st == Enum.HumanoidStateType.Ragdoll
-        or st == Enum.HumanoidStateType.FallingDown then
+    if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown then
         hum:ChangeState(Enum.HumanoidStateType.GettingUp)
     end
 end)
 
--- Auto voltar base ON/OFF
-local autoBack = false
-local wasCarrying = false
-local goingBack = false
+-- Auto voltar base
+local autoBack, wasCarrying, goingBack = false, false, false
 
 local function nameHas(str, needle)
     return string.find(string.lower(str or ""), string.lower(needle or ""), 1, true) ~= nil
@@ -203,8 +180,8 @@ end)
 
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Steal Egg Hub v16",
-        Text = "Anti-Taco REMOVIDO | so anti-ragdoll leve",
+        Title = "Steal Egg Hub v17",
+        Text = "TP leve: 12 studs / 0.02s | sem Anti-Taco",
         Duration = 4
     })
 end)
