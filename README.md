@@ -1,16 +1,20 @@
-# ♡ Steal a Egg Hub v7 ♡
+# ♡ Steal a Egg Hub v8 ♡
+
+## TP Seguro (importante)
+
+O jogo **mata** se você der TP direto da área longe até a base.
+Agora o hub faz **saltos** pelas áreas do caminho até a zona segura.
+
+Exemplo de volta:
+`Angels → Titan → Cosmic → Prehistoric → ... → Forest → Base`
 
 ## GUI
-- **Scroll** na lista de funções
-- **Redimensionar**: arrasta o canto inferior direito (⤡)
-- Arrastar a janela pelo título
-- `RightControl` abre/fecha
+- Scroll + redimensionar (canto ⤡)
+- RightControl = abrir/fechar
 
 ## Features
-- Velocidade sem limite
-- Noclip / Super Jump
-- Seletor de área + TP ovo da área + TP base + Auto Steal
-- Aimlock / Bat Aura
-- ESP / Anti-Taco / Fling
-
-Use por sua conta e risco.
+- Velocidade / Noclip / Super Jump
+- TP Ovo da área (com saltos opcionais)
+- **TP Base Seguro** (saltos pelas áreas)
+- Auto Steal com retorno seguro
+- Aimlock / Bat Aura / ESP / Anti-Taco / Fling

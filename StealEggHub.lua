@@ -1,5 +1,5 @@
--- [[ STEAL A EGG HUB v7 ]] --
--- GUI: scroll + resize com mouse
+-- [[ STEAL A EGG HUB v8 ]] --
+-- TP seguro: saltos pelas areas ate a base (nao TP direto)
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -8,7 +8,6 @@ local Debris = game:GetService("Debris")
 
 local LP = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
-local Mouse = LP:GetMouse()
 
 local Config = {
     Speed = false, SpeedVal = 100,
@@ -18,10 +17,42 @@ local Config = {
     Aimlock = false, AimRange = 80,
     BatAura = false, BatRange = 18,
     SelectedArea = "Forest",
-    AutoSteal = false, StealDelay = 1.2,
+    AutoSteal = false,
+    StealDelay = 1.0,
+    HopDelay = 0.35, -- tempo entre cada salto de area
+    UseSafeTP = true,
 }
 
--- ==================== GUI (SCROLL + RESIZE) ====================
+-- Ordem das areas: 1 = mais perto da base, ultimo = mais longe
+-- Ajuste os nomes se no seu servidor forem diferentes
+local AreaOrder = {
+    "Forest",
+    "Lake",
+    "Desert",
+    "Jungle",
+    "Snow",
+    "Volcano",
+    "Abyss",
+    "Ocean",
+    "Prehistoric",
+    "Cosmic",
+    "Cherry",
+    "Titan",
+    "Temple",
+    "Monkey",
+    "Macaco",
+    "Block",
+    "Bloco",
+    "Buzios",
+    "Búzios",
+    "Angels",
+    "Angel",
+    "Anjo",
+    "Demons",
+    "Demon",
+}
+
+-- ==================== GUI ====================
 local SG = Instance.new("ScreenGui")
 SG.Name = "StealEggHub"
 SG.ResetOnSpawn = false
@@ -29,12 +60,11 @@ SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SG.Parent = game:GetService("CoreGui")
 
 local MIN_W, MIN_H = 260, 280
-local MAX_W, MAX_H = 520, 700
+local MAX_W, MAX_H = 520, 720
 
 local Main = Instance.new("Frame")
-Main.Name = "Main"
-Main.Size = UDim2.new(0, 320, 0, 420)
-Main.Position = UDim2.new(0.5, -160, 0.5, -210)
+Main.Size = UDim2.new(0, 330, 0, 440)
+Main.Position = UDim2.new(0.5, -165, 0.5, -220)
 Main.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
 Main.BorderSizePixel = 0
 Main.Active = true
@@ -45,15 +75,12 @@ Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 12)
 local Stroke = Instance.new("UIStroke", Main)
 Stroke.Thickness = 2
 
--- Header (arrastar janela)
 local Header = Instance.new("Frame", Main)
 Header.Size = UDim2.new(1, 0, 0, 40)
 Header.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
 Header.BorderSizePixel = 0
 Header.Active = true
 Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 12)
-
--- tapa canto de baixo do header
 local HeaderFix = Instance.new("Frame", Header)
 HeaderFix.Size = UDim2.new(1, 0, 0, 14)
 HeaderFix.Position = UDim2.new(0, 0, 1, -14)
@@ -64,7 +91,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(1, -40, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "♡ STEAL A EGG HUB v7 ♡"
+Title.Text = "♡ STEAL A EGG HUB v8 ♡"
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
 Title.TextColor3 = Color3.new(1, 1, 1)
@@ -81,7 +108,6 @@ Close.TextColor3 = Color3.fromRGB(255, 90, 90)
 Instance.new("UICorner", Close).CornerRadius = UDim.new(0, 6)
 Close.MouseButton1Click:Connect(function() SG:Destroy() end)
 
--- Drag janela pelo header
 do
     local dragging, dragStart, startPos
     Header.InputBegan:Connect(function(input)
@@ -96,15 +122,13 @@ do
     end)
     UIS.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - dragStart
-            Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+            local d = input.Position - dragStart
+            Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
         end
     end)
 end
 
--- Scroll content
 local Scroll = Instance.new("ScrollingFrame", Main)
-Scroll.Name = "Scroll"
 Scroll.Size = UDim2.new(1, -12, 1, -70)
 Scroll.Position = UDim2.new(0, 6, 0, 44)
 Scroll.BackgroundTransparency = 1
@@ -118,27 +142,23 @@ Scroll.ScrollingDirection = Enum.ScrollingDirection.Y
 local List = Instance.new("UIListLayout", Scroll)
 List.SortOrder = Enum.SortOrder.LayoutOrder
 List.Padding = UDim.new(0, 8)
-
 local Pad = Instance.new("UIPadding", Scroll)
 Pad.PaddingTop = UDim.new(0, 4)
-Pad.PaddingBottom = UDim.new(0, 10)
+Pad.PaddingBottom = UDim.new(0, 12)
 Pad.PaddingLeft = UDim.new(0, 4)
 Pad.PaddingRight = UDim.new(0, 8)
 
--- Footer status
 local Status = Instance.new("TextLabel", Main)
 Status.Size = UDim2.new(1, -40, 0, 20)
 Status.Position = UDim2.new(0, 10, 1, -24)
 Status.BackgroundTransparency = 1
-Status.Text = "Arraste o canto ⤡ p/ redimensionar | Scroll no meio"
+Status.Text = "TP Base = saltos pelas areas (seguro)"
 Status.Font = Enum.Font.Gotham
 Status.TextSize = 10
 Status.TextColor3 = Color3.fromRGB(140, 140, 140)
 Status.TextXAlignment = Enum.TextXAlignment.Left
 
--- Resize handle (canto inferior direito)
 local Resize = Instance.new("TextButton", Main)
-Resize.Name = "Resize"
 Resize.Size = UDim2.new(0, 22, 0, 22)
 Resize.Position = UDim2.new(1, -22, 1, -22)
 Resize.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
@@ -150,8 +170,7 @@ Resize.ZIndex = 5
 Instance.new("UICorner", Resize).CornerRadius = UDim.new(0, 4)
 
 do
-    local resizing = false
-    local startInput, startSize
+    local resizing, startInput, startSize
     Resize.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             resizing = true
@@ -164,20 +183,14 @@ do
     end)
     UIS.InputChanged:Connect(function(input)
         if resizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-            local delta = input.Position - startInput
-            local newW = math.clamp(startSize.X + delta.X, MIN_W, MAX_W)
-            local newH = math.clamp(startSize.Y + delta.Y, MIN_H, MAX_H)
-            Main.Size = UDim2.new(0, newW, 0, newH)
+            local d = input.Position - startInput
+            Main.Size = UDim2.new(0, math.clamp(startSize.X + d.X, MIN_W, MAX_W), 0, math.clamp(startSize.Y + d.Y, MIN_H, MAX_H))
         end
     end)
 end
 
--- Helpers UI
 local order = 0
-local function nextOrder()
-    order += 1
-    return order
-end
+local function nextOrder() order += 1 return order end
 
 local function section(titleText, height)
     local f = Instance.new("Frame")
@@ -187,7 +200,6 @@ local function section(titleText, height)
     f.LayoutOrder = nextOrder()
     f.Parent = Scroll
     Instance.new("UICorner", f).CornerRadius = UDim.new(0, 8)
-
     local t = Instance.new("TextLabel", f)
     t.Size = UDim2.new(1, -12, 0, 18)
     t.Position = UDim2.new(0, 8, 0, 5)
@@ -251,7 +263,6 @@ local function styleChip(b, on, label)
     b.TextColor3 = on and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(255, 100, 100)
 end
 
--- Sections
 local S1 = section("Velocidade (sem limite)", 68)
 local SpeedBtn = toggle(S1, 5)
 local SpeedBox = box(S1, Config.SpeedVal, "Qualquer valor", 34)
@@ -263,28 +274,29 @@ local S3 = section("Super Jump", 68)
 local JumpBtn = toggle(S3, 5)
 local JumpBox = box(S3, Config.JumpPower, "Poder do pulo", 34)
 
-local S4 = section("Area + TP Steal", 168)
-local AreaBox = box(S4, Config.SelectedArea, "Forest, Lake, Volcano...", 28)
-local TPEggBtn = btn(S4, "TP Ovo da Area", 60)
-local TPBaseBtn = btn(S4, "TP Base (Shift+click = salvar base)", 92)
-local AutoStealBtn = toggle(S4, 128)
+local S4 = section("Area + TP Seguro", 200)
+local AreaBox = box(S4, Config.SelectedArea, "Forest, Lake, Angels...", 28)
+local TPEggBtn = btn(S4, "TP Ovo (com saltos)", 60)
+local TPBaseBtn = btn(S4, "TP Base SEGURO (saltos)", 92)
+local SaveBaseBtn = btn(S4, "Salvar Base Aqui", 124)
+local AutoStealBtn = toggle(S4, 160)
 local AutoLabel = Instance.new("TextLabel", S4)
 AutoLabel.Size = UDim2.new(0.55, 0, 0, 20)
-AutoLabel.Position = UDim2.new(0, 8, 0, 128)
+AutoLabel.Position = UDim2.new(0, 8, 0, 160)
 AutoLabel.BackgroundTransparency = 1
-AutoLabel.Text = "Auto Steal"
+AutoLabel.Text = "Auto Steal Seguro"
 AutoLabel.Font = Enum.Font.Gotham
 AutoLabel.TextSize = 12
 AutoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 AutoLabel.TextXAlignment = Enum.TextXAlignment.Left
 
-local S5 = section("Aimlock (player perto)", 68)
+local S5 = section("Aimlock", 68)
 local AimBtn = toggle(S5, 5)
-local AimBox = box(S5, Config.AimRange, "Range aimlock", 34)
+local AimBox = box(S5, Config.AimRange, "Range", 34)
 
-local S6 = section("Bat Aura / Hitbox taco", 68)
+local S6 = section("Bat Aura / Hitbox", 68)
 local BatBtn = toggle(S6, 5)
-local BatBox = box(S6, Config.BatRange, "Range do taco", 34)
+local BatBox = box(S6, Config.BatRange, "Range taco", 34)
 
 local S7 = section("ESP | Anti-Taco | Fling", 48)
 local ESPBtn = Instance.new("TextButton", S7)
@@ -336,11 +348,12 @@ local function notify(msg)
     end)
 end
 
--- ==================== SPEED ====================
+-- ==================== SPEED / NOCLIP / JUMP ====================
 RunService.Heartbeat:Connect(function()
-    if not Config.Speed then return end
-    local hum = getHum(getChar())
-    if hum then hum.WalkSpeed = Config.SpeedVal end
+    if Config.Speed then
+        local hum = getHum(getChar())
+        if hum then hum.WalkSpeed = Config.SpeedVal end
+    end
 end)
 
 SpeedBtn.MouseButton1Click:Connect(function()
@@ -356,7 +369,6 @@ SpeedBox.FocusLost:Connect(function()
     else SpeedBox.Text = tostring(Config.SpeedVal) end
 end)
 
--- ==================== NOCLIP ====================
 local noclipConn
 local function setNoclip(char, on)
     if not char then return end
@@ -379,7 +391,6 @@ NoclipBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ==================== SUPER JUMP ====================
 local function applyJump()
     local hum = getHum(getChar())
     if not hum then return end
@@ -407,8 +418,19 @@ JumpBox.FocusLost:Connect(function()
     else JumpBox.Text = tostring(Config.JumpPower) end
 end)
 
--- ==================== BASE / TP ====================
+-- ==================== WAYPOINTS / SAFE HOP TP ====================
 local savedBase = nil
+local areaWaypoints = {} -- [areaNameLower] = CFrame
+
+local function nameHas(str, needle)
+    return string.find(string.lower(str or ""), string.lower(needle or ""), 1, true) ~= nil
+end
+
+local function getPart(obj)
+    if obj:IsA("BasePart") then return obj end
+    if obj:IsA("Model") then return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart") end
+    return nil
+end
 
 local function captureBase()
     local root = getRoot(getChar())
@@ -425,13 +447,26 @@ local function findBaseCFrame()
     return nil
 end
 
-task.defer(function()
-    task.wait(1)
-    captureBase()
-    if savedBase then notify("Base salva (posicao atual)") end
-end)
+-- Descobre CFrame de cada area (pelo nome de pastas/partes no workspace)
+local function refreshAreaWaypoints()
+    areaWaypoints = {}
+    for _, areaName in ipairs(AreaOrder) do
+        local key = string.lower(areaName)
+        if not areaWaypoints[key] then
+            for _, obj in pairs(workspace:GetDescendants()) do
+                if nameHas(obj.Name, areaName) then
+                    local part = getPart(obj)
+                    if part then
+                        areaWaypoints[key] = part.CFrame + Vector3.new(0, 4, 0)
+                        break
+                    end
+                end
+            end
+        end
+    end
+end
 
-local function tpTo(cf)
+local function tpInstant(cf)
     local root = getRoot(getChar())
     if not root or not cf then return false end
     root.CFrame = cf
@@ -440,10 +475,108 @@ local function tpTo(cf)
     return true
 end
 
-local function nameHas(str, needle)
-    return string.find(string.lower(str or ""), string.lower(needle or ""), 1, true) ~= nil
+-- Encontra qual indice de AreaOrder esta mais perto do player
+local function getNearestAreaIndex()
+    local root = getRoot(getChar())
+    if not root then return 1 end
+    refreshAreaWaypoints()
+
+    local bestIdx, bestDist = 1, math.huge
+    for i, areaName in ipairs(AreaOrder) do
+        local wp = areaWaypoints[string.lower(areaName)]
+        if wp then
+            local d = (root.Position - wp.Position).Magnitude
+            if d < bestDist then
+                bestDist = d
+                bestIdx = i
+            end
+        end
+    end
+    return bestIdx
 end
 
+local function getAreaIndexByName(name)
+    local n = string.lower(name or "")
+    for i, areaName in ipairs(AreaOrder) do
+        if nameHas(areaName, n) or nameHas(n, areaName) then
+            return i
+        end
+    end
+    return nil
+end
+
+-- TP em saltos: do indice atual ate targetIdx (inclusive), depois base se for return
+local hopping = false
+
+local function hopAlong(fromIdx, toIdx, finallyBase)
+    if hopping then notify("Ja esta em TP seguro...") return end
+    hopping = true
+    refreshAreaWaypoints()
+
+    local step = fromIdx > toIdx and -1 or 1
+    notify(string.format("TP seguro: area %d → %d", fromIdx, toIdx))
+
+    for i = fromIdx, toIdx, step do
+        if not hopping then break end
+        local areaName = AreaOrder[i]
+        local wp = areaWaypoints[string.lower(areaName)]
+        if wp then
+            tpInstant(wp)
+            notify("Salto: " .. areaName)
+            task.wait(Config.HopDelay)
+        end
+    end
+
+    if finallyBase then
+        local base = findBaseCFrame()
+        if base then
+            -- ultimos saltos curtos em direcao a base (3 passos)
+            local root = getRoot(getChar())
+            if root then
+                local start = root.Position
+                local goal = base.Position
+                for t = 1, 3 do
+                    local alpha = t / 3
+                    local pos = start:Lerp(goal, alpha)
+                    tpInstant(CFrame.new(pos + Vector3.new(0, 3, 0)))
+                    task.wait(Config.HopDelay * 0.8)
+                end
+            end
+            tpInstant(base)
+            notify("Chegou na base (seguro)")
+        end
+    end
+
+    hopping = false
+end
+
+-- Volta pra base com saltos das areas ate Forest e base
+local function safeTPBase()
+    task.spawn(function()
+        local idx = getNearestAreaIndex()
+        -- vai de onde esta ate a area 1 (mais perto da base)
+        hopAlong(idx, 1, true)
+    end)
+end
+
+-- Vai ate a area selecionada com saltos
+local function safeTPToArea(areaName)
+    task.spawn(function()
+        refreshAreaWaypoints()
+        local targetIdx = getAreaIndexByName(areaName) or getNearestAreaIndex()
+        local fromIdx = getNearestAreaIndex()
+        hopAlong(fromIdx, targetIdx, false)
+    end)
+end
+
+task.defer(function()
+    task.wait(1)
+    captureBase()
+    refreshAreaWaypoints()
+    if savedBase then notify("Base salva + waypoints carregados") end
+end)
+
+-- ==================== EGGS ====================
 local function isEggLike(obj)
     if nameHas(obj.Name, "egg") then return true end
     if obj:GetAttribute("Egg") or obj:GetAttribute("IsEgg") then return true end
@@ -458,12 +591,6 @@ local function isEggLike(obj)
         end
     end
     return false
-end
-
-local function getPart(obj)
-    if obj:IsA("BasePart") then return obj end
-    if obj:IsA("Model") then return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart") end
-    return nil
 end
 
 local function eggInArea(obj, area)
@@ -504,8 +631,8 @@ local function pickEggForArea(area)
     local eggs = findEggsInArea(area)
     if #eggs == 0 then
         eggs = findAnyEggs()
-        if #eggs == 0 then return nil, "Nenhum ovo encontrado" end
-        notify("Area sem ovo, usando generico")
+        if #eggs == 0 then return nil, "Nenhum ovo" end
+        notify("Area sem ovo, generico")
     end
     local root = getRoot(getChar())
     local best, bestDist = nil, math.huge
@@ -523,44 +650,68 @@ AreaBox.FocusLost:Connect(function()
     else AreaBox.Text = Config.SelectedArea end
 end)
 
+-- TP ovo: primeiro saltos ate a area, depois TP curto no ovo
 TPEggBtn.MouseButton1Click:Connect(function()
-    local egg, err = pickEggForArea(Config.SelectedArea)
-    if not egg then notify(err or "Ovo nao encontrado") return end
-    if tpTo(egg.part.CFrame + Vector3.new(0, 3, 0)) then
-        notify("TP ovo: " .. Config.SelectedArea .. " (" .. egg.obj.Name .. ")")
-    end
+    task.spawn(function()
+        safeTPToArea(Config.SelectedArea)
+        task.wait(Config.HopDelay * 2)
+        local egg, err = pickEggForArea(Config.SelectedArea)
+        if not egg then notify(err or "Ovo nao encontrado") return end
+        -- salto curto ate o ovo (nao TP de muito longe)
+        local root = getRoot(getChar())
+        if root then
+            local start = root.Position
+            local goal = egg.part.Position + Vector3.new(0, 3, 0)
+            for t = 1, 4 do
+                tpInstant(CFrame.new(start:Lerp(goal, t / 4)))
+                task.wait(0.12)
+            end
+        end
+        notify("No ovo: " .. egg.obj.Name)
+    end)
 end)
 
 TPBaseBtn.MouseButton1Click:Connect(function()
-    if UIS:IsKeyDown(Enum.KeyCode.LeftShift) then
-        captureBase()
-        notify("Base salva (posicao atual)")
-        return
-    end
-    local cf = findBaseCFrame()
-    if cf and tpTo(cf) then notify("TP Base")
-    else notify("Base nao encontrada") end
+    safeTPBase()
+end)
+
+SaveBaseBtn.MouseButton1Click:Connect(function()
+    captureBase()
+    refreshAreaWaypoints()
+    notify("Base + areas atualizadas")
 end)
 
 local function autoStealLoop()
     while Config.AutoSteal do
+        -- vai ate area com saltos
+        safeTPToArea(Config.SelectedArea)
+        task.wait(Config.HopDelay * 3)
+
         local egg = pickEggForArea(Config.SelectedArea)
         if egg then
-            tpTo(egg.part.CFrame + Vector3.new(0, 3, 0))
+            local root = getRoot(getChar())
+            if root then
+                local start = root.Position
+                local goal = egg.part.Position + Vector3.new(0, 3, 0)
+                for t = 1, 4 do
+                    tpInstant(CFrame.new(start:Lerp(goal, t / 4)))
+                    task.wait(0.12)
+                end
+            end
             notify("Auto: ovo " .. egg.obj.Name)
             task.wait(Config.StealDelay)
             for _, d in pairs(egg.obj:GetDescendants()) do
                 if d:IsA("ProximityPrompt") then pcall(function() fireproximityprompt(d) end) end
             end
-            task.wait(0.35)
-            local base = findBaseCFrame()
-            if base then tpTo(base) notify("Auto: base") end
-            task.wait(Config.StealDelay)
+            task.wait(0.4)
+            -- volta com saltos seguros
+            safeTPBase()
+            task.wait(Config.HopDelay * (#AreaOrder * 0.15 + 2))
         else
             notify("Auto: sem ovo")
             task.wait(2)
         end
-        task.wait(0.25)
+        task.wait(0.5)
     end
 end
 
@@ -568,9 +719,12 @@ AutoStealBtn.MouseButton1Click:Connect(function()
     Config.AutoSteal = not Config.AutoSteal
     setBtn(AutoStealBtn, Config.AutoSteal)
     if Config.AutoSteal then
-        notify("Auto Steal ON - " .. Config.SelectedArea)
+        notify("Auto Steal SEGURO ON")
         task.spawn(autoStealLoop)
-    else notify("Auto Steal OFF") end
+    else
+        hopping = false
+        notify("Auto Steal OFF")
+    end
 end)
 
 -- ==================== AIMLOCK ====================
@@ -612,7 +766,6 @@ end)
 
 -- ==================== BAT AURA ====================
 local originalHandles = {}
-
 local function enlargeBat(tool, on)
     if not tool then return end
     local handle = tool:FindFirstChild("Handle") or tool:FindFirstChildWhichIsA("BasePart")
@@ -664,10 +817,7 @@ end)
 BatBtn.MouseButton1Click:Connect(function()
     Config.BatAura = not Config.BatAura
     setBtn(BatBtn, Config.BatAura)
-    if not Config.BatAura then
-        local bat = getBat()
-        if bat then enlargeBat(bat, false) end
-    end
+    if not Config.BatAura then local bat = getBat() if bat then enlargeBat(bat, false) end end
 end)
 
 BatBox.FocusLost:Connect(function()
@@ -787,7 +937,6 @@ end)
 -- ==================== ESP ====================
 local ESPFolder = Instance.new("Folder", SG)
 ESPFolder.Name = "ESP"
-
 local function clearESP() ESPFolder:ClearAllChildren() end
 
 local function makeESP(plr)
@@ -796,7 +945,6 @@ local function makeESP(plr)
     local head = char:FindFirstChild("Head")
     local root = char:FindFirstChild("HumanoidRootPart")
     if not head or not root then return end
-
     local hl = Instance.new("Highlight")
     hl.Name = plr.Name
     hl.Adornee = char
@@ -805,7 +953,6 @@ local function makeESP(plr)
     hl.FillTransparency = 0.55
     hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
     hl.Parent = ESPFolder
-
     local bb = Instance.new("BillboardGui")
     bb.Name = plr.Name .. "_bb"
     bb.Adornee = head
@@ -813,7 +960,6 @@ local function makeESP(plr)
     bb.StudsOffset = Vector3.new(0, 2.3, 0)
     bb.AlwaysOnTop = true
     bb.Parent = ESPFolder
-
     local name = Instance.new("TextLabel", bb)
     name.Size = UDim2.new(1, 0, 0.55, 0)
     name.BackgroundTransparency = 1
@@ -822,7 +968,6 @@ local function makeESP(plr)
     name.TextSize = 11
     name.TextColor3 = Color3.new(1, 1, 1)
     name.TextStrokeTransparency = 0.4
-
     local dist = Instance.new("TextLabel", bb)
     dist.Size = UDim2.new(1, 0, 0.45, 0)
     dist.Position = UDim2.new(0, 0, 0.55, 0)
@@ -831,7 +976,6 @@ local function makeESP(plr)
     dist.Font = Enum.Font.Gotham
     dist.TextSize = 10
     dist.TextColor3 = Color3.fromRGB(200, 200, 200)
-
     local conn
     conn = RunService.RenderStepped:Connect(function()
         if not Config.ESP or not char.Parent or not root.Parent then
@@ -884,5 +1028,5 @@ UIS.InputBegan:Connect(function(inp, gpe)
     end
 end)
 
-print("[StealEggHub v7] GUI com scroll + resize")
-notify("v7: arraste ⤡ no canto p/ redimensionar")
+print("[StealEggHub v8] TP seguro por saltos de area")
+notify("v8: TP Base agora usa saltos pelas areas")
