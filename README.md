@@ -1,20 +1,15 @@
-# ♡ Steal a Egg Hub v8 ♡
+# ♡ Steal a Egg Hub v9 ♡
 
-## TP Seguro (importante)
+## Novidades
+- **Areas pre-set**: clica no botao (Forest, Lake, Ocean, Angels...)
+- **Movimento deslizante (Tween)**: vai ate o ovo/base sem TP seco (menos kill)
+- **Ocean / Abyss** incluido
+- Scroll + resize na GUI
 
-O jogo **mata** se você der TP direto da área longe até a base.
-Agora o hub faz **saltos** pelas áreas do caminho até a zona segura.
+## Como roubar
+1. Clica a **area** (ex: Ocean)
+2. Clica **Ir ao Ovo (deslizar)**
+3. Pega o ovo
+4. Clica **Voltar Base (deslizar)**
 
-Exemplo de volta:
-`Angels → Titan → Cosmic → Prehistoric → ... → Forest → Base`
-
-## GUI
-- Scroll + redimensionar (canto ⤡)
-- RightControl = abrir/fechar
-
-## Features
-- Velocidade / Noclip / Super Jump
-- TP Ovo da área (com saltos opcionais)
-- **TP Base Seguro** (saltos pelas áreas)
-- Auto Steal com retorno seguro
-- Aimlock / Bat Aura / ESP / Anti-Taco / Fling
+Ou liga **Auto Steal**.
