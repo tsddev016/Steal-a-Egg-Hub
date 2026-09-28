@@ -1,5 +1,5 @@
--- [[ STEAL A EGG HUB v10 ]] --
--- TP otimizado (sem freeze) + Auto-TP volta ao pegar ovo
+-- [[ STEAL A EGG HUB v11 ]] --
+-- Auto Mythic/Secret spawn + roubo automatico
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -17,9 +17,16 @@ local Config = {
     Aimlock = false, AimRange = 80,
     BatAura = false, BatRange = 18,
     SelectedArea = "Ocean",
-    AutoReturn = false, -- auto volta quando detecta ovo
-    HopStuds = 40,      -- distancia de cada saltinho
-    HopDelay = 0.08,   -- tempo entre saltos (menor = mais rapido, maior = mais seguro)
+    AutoReturn = false,
+    AutoRare = false, -- auto rouba mythic/secret
+    HopStuds = 40,
+    HopDelay = 0.08,
+}
+
+local RareKeywords = {
+    "mythic", "mitico", "mítico", "secret", "secreto",
+    "divine", "divino", "eternal", "cosmic", "legendary",
+    "secrect", "mythical"
 }
 
 local AreaList = {
@@ -28,28 +35,28 @@ local AreaList = {
     {name = "Desert", keys = {"Desert", "Deserto"}},
     {name = "Jungle", keys = {"Jungle", "Selva"}},
     {name = "Snow", keys = {"Snow", "Neve"}},
-    {name = "Volcano", keys = {"Volcano", "Vulcao", "Vulcão"}},
-    {name = "Ocean", keys = {"Ocean", "Abyss", "Mar", "Sea", "Abismo"}},
-    {name = "Prehistoric", keys = {"Prehistoric", "Pre-historico"}},
-    {name = "Cosmic", keys = {"Cosmic", "Cosmico"}},
+    {name = "Volcano", keys = {"Volcano", "Vulcao"}},
+    {name = "Ocean", keys = {"Ocean", "Abyss", "Mar", "Sea"}},
+    {name = "Prehistoric", keys = {"Prehistoric"}},
+    {name = "Cosmic", keys = {"Cosmic"}},
     {name = "Cherry", keys = {"Cherry", "Blossom"}},
     {name = "Titan", keys = {"Titan", "Temple"}},
     {name = "Monkey", keys = {"Monkey", "Macaco", "Gorilla"}},
     {name = "Angels", keys = {"Angels", "Angel", "Anjo", "Demons"}},
 }
 
--- ==================== GUI ====================
+-- GUI
 local SG = Instance.new("ScreenGui")
 SG.Name = "StealEggHub"
 SG.ResetOnSpawn = false
 SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SG.Parent = game:GetService("CoreGui")
 
-local MIN_W, MIN_H, MAX_W, MAX_H = 280, 300, 560, 740
+local MIN_W, MIN_H, MAX_W, MAX_H = 280, 300, 560, 760
 
 local Main = Instance.new("Frame")
-Main.Size = UDim2.new(0, 340, 0, 460)
-Main.Position = UDim2.new(0.5, -170, 0.5, -230)
+Main.Size = UDim2.new(0, 340, 0, 480)
+Main.Position = UDim2.new(0.5, -170, 0.5, -240)
 Main.BackgroundColor3 = Color3.fromRGB(12, 12, 12)
 Main.BorderSizePixel = 0
 Main.Active = true
@@ -76,7 +83,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(1, -40, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "♡ STEAL A EGG HUB v10 ♡"
+Title.Text = "♡ STEAL A EGG HUB v11 ♡"
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
 Title.TextColor3 = Color3.new(1, 1, 1)
@@ -138,7 +145,7 @@ local Status = Instance.new("TextLabel", Main)
 Status.Size = UDim2.new(1, -40, 0, 20)
 Status.Position = UDim2.new(0, 10, 1, -24)
 Status.BackgroundTransparency = 1
-Status.Text = "v10: TP leve + Auto Volta"
+Status.Text = "v11: Auto Mythic/Secret"
 Status.Font = Enum.Font.Gotham
 Status.TextSize = 10
 Status.TextColor3 = Color3.fromRGB(140, 140, 140)
@@ -251,9 +258,14 @@ end
 
 local function notify(msg)
     Status.Text = tostring(msg)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "Steal Egg Hub", Text = tostring(msg), Duration = 4
+        })
+    end)
 end
 
--- SPEED
+-- Sections
 local S1 = section("Velocidade", 68)
 local SpeedBtn = toggle(S1, 5)
 local SpeedBox = box(S1, Config.SpeedVal, "Valor", 34)
@@ -265,7 +277,6 @@ local S3 = section("Super Jump", 68)
 local JumpBtn = toggle(S3, 5)
 local JumpBox = box(S3, Config.JumpPower, "Pulo", 34)
 
--- AREAS
 local areaSectionH = 28 + math.ceil(#AreaList / 3) * 30 + 8
 local SArea = section("Area (clique)", areaSectionH)
 local SelectedLabel = Instance.new("TextLabel", SArea)
@@ -291,7 +302,6 @@ local function selectArea(name)
             b.TextColor3 = Color3.new(1, 1, 1)
         end
     end
-    notify("Area: " .. name)
 end
 
 for i, info in ipairs(AreaList) do
@@ -311,21 +321,31 @@ for i, info in ipairs(AreaList) do
 end
 selectArea(Config.SelectedArea)
 
--- TP
-local S4 = section("TP / Auto Volta", 168)
+local S4 = section("TP / Auto", 200)
 local GoEggBtn = btn(S4, "Ir ao Ovo (saltinhos)", 28)
 local GoBaseBtn = btn(S4, "Voltar Base (saltinhos)", 60)
 local SaveBaseBtn = btn(S4, "Salvar Base Aqui", 92)
 local AutoReturnBtn = toggle(S4, 128)
 local AutoReturnLabel = Instance.new("TextLabel", S4)
-AutoReturnLabel.Size = UDim2.new(0.65, 0, 0, 20)
+AutoReturnLabel.Size = UDim2.new(0.65, 0, 0, 18)
 AutoReturnLabel.Position = UDim2.new(0, 8, 0, 128)
 AutoReturnLabel.BackgroundTransparency = 1
-AutoReturnLabel.Text = "Auto-TP ao roubar ovo"
+AutoReturnLabel.Text = "Auto-TP ao roubar"
 AutoReturnLabel.Font = Enum.Font.Gotham
-AutoReturnLabel.TextSize = 12
+AutoReturnLabel.TextSize = 11
 AutoReturnLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
 AutoReturnLabel.TextXAlignment = Enum.TextXAlignment.Left
+
+local AutoRareBtn = toggle(S4, 156)
+local AutoRareLabel = Instance.new("TextLabel", S4)
+AutoRareLabel.Size = UDim2.new(0.65, 0, 0, 18)
+AutoRareLabel.Position = UDim2.new(0, 8, 0, 156)
+AutoRareLabel.BackgroundTransparency = 1
+AutoRareLabel.Text = "Auto Mythic/Secret"
+AutoRareLabel.Font = Enum.Font.GothamBold
+AutoRareLabel.TextSize = 11
+AutoRareLabel.TextColor3 = Color3.fromRGB(255, 200, 80)
+AutoRareLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 local S5 = section("Aimlock", 68)
 local AimBtn = toggle(S5, 5)
@@ -376,14 +396,13 @@ local function getChar() return LP.Character end
 local function getHum(c) return c and c:FindFirstChildOfClass("Humanoid") end
 local function getRoot(c) return c and c:FindFirstChild("HumanoidRootPart") end
 
--- ==================== SPEED / NOCLIP / JUMP ====================
+-- SPEED / NOCLIP / JUMP
 RunService.Heartbeat:Connect(function()
     if Config.Speed then
         local hum = getHum(getChar())
         if hum then hum.WalkSpeed = Config.SpeedVal end
     end
 end)
-
 SpeedBtn.MouseButton1Click:Connect(function()
     Config.Speed = not Config.Speed
     setBtn(SpeedBtn, Config.Speed)
@@ -438,12 +457,13 @@ JumpBox.FocusLost:Connect(function()
     else JumpBox.Text = tostring(Config.JumpPower) end
 end)
 
--- ==================== CACHE (evita freeze) ====================
+-- CACHE
 local savedBase = nil
-local waypointCache = {} -- name -> Vector3
-local eggCache = {}      -- {pos, obj}
+local waypointCache = {}
+local eggCache = {}
+local knownEggs = {} -- path -> true (pra detectar spawn novo)
 local lastCacheTime = 0
-local CACHE_TTL = 8 -- segundos
+local CACHE_TTL = 6
 
 local function nameHas(str, needle)
     return string.find(string.lower(str or ""), string.lower(needle or ""), 1, true) ~= nil
@@ -453,6 +473,51 @@ local function getPart(obj)
     if obj:IsA("BasePart") then return obj end
     if obj:IsA("Model") then return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true) end
     return nil
+end
+
+local function isRareText(text)
+    local t = string.lower(text or "")
+    for _, k in ipairs(RareKeywords) do
+        if string.find(t, k, 1, true) then return true end
+    end
+    return false
+end
+
+local function isRareEgg(obj)
+    if isRareText(obj.Name) then return true end
+    -- atributos
+    local attrs = {"Rarity", "EggRarity", "Tier", "Type", "Quality"}
+    for _, a in ipairs(attrs) do
+        local v = obj:GetAttribute(a)
+        if v and isRareText(tostring(v)) then return true end
+    end
+    -- filhos (labels, StringValues)
+    for _, d in pairs(obj:GetDescendants()) do
+        if d:IsA("StringValue") or d:IsA("StringValue") then
+            if isRareText(d.Value) or isRareText(d.Name) then return true end
+        end
+        if d:IsA("TextLabel") or d:IsA("TextBox") then
+            if isRareText(d.Text) then return true end
+        end
+        if isRareText(d.Name) then return true end
+    end
+    local ok, path = pcall(function() return obj:GetFullName() end)
+    if ok and isRareText(path) then return true end
+    return false
+end
+
+local function isEggLike(obj)
+    if nameHas(obj.Name, "egg") then return true end
+    if obj:GetAttribute("Egg") or obj:GetAttribute("IsEgg") then return true end
+    for _, d in pairs(obj:GetChildren()) do
+        if d:IsA("ProximityPrompt") then
+            local t = (d.ActionText or "") .. (d.ObjectText or "")
+            if nameHas(t, "egg") or nameHas(t, "steal") or nameHas(t, "grab") or nameHas(t, "pick") then
+                return true
+            end
+        end
+    end
+    return false
 end
 
 local function captureBase()
@@ -465,10 +530,8 @@ local function rebuildCache()
     eggCache = {}
     lastCacheTime = tick()
 
-    -- scan UMA vez so
     for _, obj in pairs(workspace:GetDescendants()) do
         local n = obj.Name
-        -- waypoints de area
         for _, area in ipairs(AreaList) do
             if not waypointCache[area.name] then
                 for _, key in ipairs(area.keys) do
@@ -482,31 +545,25 @@ local function rebuildCache()
                 end
             end
         end
-        -- ovos
-        local isEgg = nameHas(n, "egg")
-        if not isEgg and (obj:IsA("Model") or obj:IsA("BasePart")) then
-            for _, d in pairs(obj:GetChildren()) do
-                if d:IsA("ProximityPrompt") then
-                    local t = (d.ActionText or "") .. (d.ObjectText or "")
-                    if nameHas(t, "egg") or nameHas(t, "steal") or nameHas(t, "grab") then
-                        isEgg = true
-                        break
-                    end
-                end
-            end
-        end
-        if isEgg then
+        if isEggLike(obj) then
             local part = getPart(obj)
             if part then
-                table.insert(eggCache, {pos = part.Position, obj = obj, part = part})
+                local id = obj:GetFullName()
+                table.insert(eggCache, {
+                    pos = part.Position,
+                    obj = obj,
+                    part = part,
+                    rare = isRareEgg(obj),
+                    id = id,
+                })
+                knownEggs[id] = true
             end
         end
     end
-    notify("Cache: " .. #eggCache .. " ovos | areas ok")
 end
 
 local function ensureCache()
-    if tick() - lastCacheTime > CACHE_TTL or next(waypointCache) == nil then
+    if tick() - lastCacheTime > CACHE_TTL then
         rebuildCache()
     end
 end
@@ -520,14 +577,13 @@ local function getBasePos()
     return root and root.Position or nil
 end
 
--- ==================== HOP MOVE (leve, sem freeze) ====================
+-- HOP
 local hopping = false
 local hopToken = 0
 
 local function hopTo(targetPos)
     local root = getRoot(getChar())
     if not root or not targetPos then return false end
-
     hopToken += 1
     local myToken = hopToken
     hopping = true
@@ -541,17 +597,13 @@ local function hopTo(targetPos)
     end
 
     local step = Config.HopStuds
-    local steps = math.max(1, math.ceil(dist / step))
-    -- limita steps pra nao travar
-    steps = math.min(steps, 60)
+    local steps = math.min(math.max(1, math.ceil(dist / step)), 60)
 
     for i = 1, steps do
         if hopToken ~= myToken then hopping = false return false end
         root = getRoot(getChar())
         if not root then hopping = false return false end
-
-        local alpha = i / steps
-        local pos = start:Lerp(targetPos, alpha)
+        local pos = start:Lerp(targetPos, i / steps)
         root.CFrame = CFrame.new(pos + Vector3.new(0, 1.5, 0))
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
@@ -578,19 +630,16 @@ local function buildPathToBase()
     ensureCache()
     local root = getRoot(getChar())
     if not root then return {} end
-
     local fromPos = root.Position
     local base = getBasePos()
     if not base then return {} end
 
-    -- ordena waypoints pela distancia ate a base (mais longe primeiro se estamos longe)
     local wps = {}
     for name, pos in pairs(waypointCache) do
-        table.insert(wps, {name = name, pos = pos, dBase = (pos - base).Magnitude})
+        table.insert(wps, {pos = pos, dBase = (pos - base).Magnitude})
     end
     table.sort(wps, function(a, b) return a.dBase > b.dBase end)
 
-    -- pega so waypoints entre o player e a base
     local myDist = (fromPos - base).Magnitude
     local path = {}
     for _, w in ipairs(wps) do
@@ -598,7 +647,6 @@ local function buildPathToBase()
             table.insert(path, w.pos)
         end
     end
-    -- ordena path: do mais longe do base pro mais perto
     table.sort(path, function(a, b)
         return (a - base).Magnitude > (b - base).Magnitude
     end)
@@ -613,7 +661,6 @@ local function findEggInSelectedArea()
         if a.name == Config.SelectedArea then area = a break end
     end
     local keys = area and area.keys or {Config.SelectedArea}
-
     local root = getRoot(getChar())
     local best, bestD = nil, math.huge
 
@@ -629,7 +676,7 @@ local function findEggInSelectedArea()
                 if match then break end
                 cur = cur.Parent
             end
-            if match or #eggCache < 5 then
+            if match or #eggCache < 8 then
                 local d = root and (root.Position - e.pos).Magnitude or 0
                 if d < bestD then bestD = d best = e end
             end
@@ -638,8 +685,44 @@ local function findEggInSelectedArea()
     return best
 end
 
+local function stealEggObj(egg)
+    if not egg or not egg.pos then return end
+    notify("Roubando: " .. (egg.obj and egg.obj.Name or "ovo"))
+    local path = {}
+    -- tenta waypoint da area se existir
+    if egg.obj then
+        for _, a in ipairs(AreaList) do
+            for _, k in ipairs(a.keys) do
+                if nameHas(egg.obj:GetFullName(), k) and waypointCache[a.name] then
+                    table.insert(path, waypointCache[a.name])
+                    break
+                end
+            end
+        end
+    end
+    table.insert(path, egg.pos + Vector3.new(0, 3, 0))
+    hopAlongPath(path)
+    if egg.obj then
+        for _, d in pairs(egg.obj:GetDescendants()) do
+            if d:IsA("ProximityPrompt") then
+                pcall(function() fireproximityprompt(d) end)
+            end
+        end
+    end
+    task.wait(0.4)
+    -- volta
+    local back = buildPathToBase()
+    if #back == 0 then
+        local base = getBasePos()
+        if base then hopTo(base) end
+    else
+        hopAlongPath(back)
+    end
+    notify("Roubo finalizado")
+end
+
 local function goToEgg()
-    if hopping then notify("Aguarde o TP atual") return end
+    if hopping then notify("Aguarde o TP") return end
     task.spawn(function()
         ensureCache()
         local egg = findEggInSelectedArea()
@@ -647,33 +730,15 @@ local function goToEgg()
             rebuildCache()
             egg = findEggInSelectedArea()
         end
-        if not egg then
-            notify("Ovo nao encontrado - tente outra area")
-            return
-        end
-        notify("Indo ao ovo (" .. Config.SelectedArea .. ")...")
-        -- caminho: waypoints ate a area + ovo
-        local path = {}
-        local wp = waypointCache[Config.SelectedArea]
-        if wp then table.insert(path, wp) end
-        table.insert(path, egg.pos + Vector3.new(0, 3, 0))
-        hopAlongPath(path)
-        -- prompt
-        if egg.obj then
-            for _, d in pairs(egg.obj:GetDescendants()) do
-                if d:IsA("ProximityPrompt") then
-                    pcall(function() fireproximityprompt(d) end)
-                end
-            end
-        end
-        notify("Chegou no ovo")
+        if not egg then notify("Ovo nao encontrado") return end
+        stealEggObj(egg)
     end)
 end
 
 local function goToBase()
-    if hopping then notify("Aguarde o TP atual") return end
+    if hopping then notify("Aguarde") return end
     task.spawn(function()
-        notify("Voltando com saltinhos...")
+        notify("Voltando...")
         local path = buildPathToBase()
         if #path == 0 then
             local base = getBasePos()
@@ -685,27 +750,17 @@ local function goToBase()
     end)
 end
 
--- ==================== AUTO-TP AO ROUBAR OVO ====================
+-- AUTO RETURN
 local wasCarrying = false
-
 local function isCarryingEgg()
     local char = getChar()
     if not char then return false end
-    -- tool/model com egg no personagem
     for _, c in pairs(char:GetChildren()) do
         if nameHas(c.Name, "egg") then return true end
     end
-    -- atributos comuns
     if char:GetAttribute("Carrying") or char:GetAttribute("HasEgg") or char:GetAttribute("HoldingEgg") then
         return true
     end
-    local hum = getHum(char)
-    if hum then
-        for _, t in pairs(char:GetChildren()) do
-            if t:IsA("Tool") and nameHas(t.Name, "egg") then return true end
-        end
-    end
-    -- backpack
     local bp = LP:FindFirstChild("Backpack")
     if bp then
         for _, t in pairs(bp:GetChildren()) do
@@ -715,7 +770,6 @@ local function isCarryingEgg()
     return false
 end
 
--- detecta mudanca: nao tinha ovo -> tem ovo = acabou de roubar
 RunService.Heartbeat:Connect(function()
     if not Config.AutoReturn then
         wasCarrying = isCarryingEgg()
@@ -723,17 +777,80 @@ RunService.Heartbeat:Connect(function()
     end
     local carrying = isCarryingEgg()
     if carrying and not wasCarrying and not hopping then
-        notify("Ovo detectado! Auto-TP base...")
+        notify("Ovo detectado! Voltando...")
         goToBase()
     end
     wasCarrying = carrying
+end)
+
+-- AUTO MYTHIC / SECRET
+local rareBusy = false
+local function scanForNewRare()
+    if not Config.AutoRare or rareBusy or hopping then return end
+
+    for _, obj in pairs(workspace:GetDescendants()) do
+        if isEggLike(obj) and isRareEgg(obj) then
+            local id = obj:GetFullName()
+            if not knownEggs[id] then
+                knownEggs[id] = true
+                local part = getPart(obj)
+                if part then
+                    rareBusy = true
+                    notify("MYTHIC/SECRET SPAWNOU! Roubando...")
+                    task.spawn(function()
+                        stealEggObj({
+                            pos = part.Position,
+                            obj = obj,
+                            part = part,
+                            rare = true,
+                            id = id,
+                        })
+                        rareBusy = false
+                    end)
+                    return
+                end
+            end
+        end
+    end
+end
+
+-- scan leve a cada 1.5s (nao trava)
+task.spawn(function()
+    while SG.Parent do
+        if Config.AutoRare then
+            pcall(scanForNewRare)
+        end
+        task.wait(1.5)
+    end
+end)
+
+-- tambem escuta ChildAdded em pastas principais
+workspace.DescendantAdded:Connect(function(obj)
+    if not Config.AutoRare or rareBusy or hopping then return end
+    task.defer(function()
+        if isEggLike(obj) and isRareEgg(obj) then
+            local id = obj:GetFullName()
+            if not knownEggs[id] then
+                knownEggs[id] = true
+                local part = getPart(obj)
+                if part then
+                    rareBusy = true
+                    notify("SECRET/MYTHIC detectado!")
+                    task.spawn(function()
+                        stealEggObj({pos = part.Position, obj = obj, part = part, rare = true, id = id})
+                        rareBusy = false
+                    end)
+                end
+            end
+        end
+    end)
 end)
 
 task.defer(function()
     task.wait(1)
     captureBase()
     rebuildCache()
-    notify("Pronto - salve a base e escolha a area")
+    notify("v11 pronto - ligue Auto Mythic/Secret")
 end)
 
 GoEggBtn.MouseButton1Click:Connect(goToEgg)
@@ -747,10 +864,20 @@ end)
 AutoReturnBtn.MouseButton1Click:Connect(function()
     Config.AutoReturn = not Config.AutoReturn
     setBtn(AutoReturnBtn, Config.AutoReturn)
-    notify(Config.AutoReturn and "Auto-TP ao roubar: ON" or "Auto-TP ao roubar: OFF")
 end)
 
--- AIMLOCK
+AutoRareBtn.MouseButton1Click:Connect(function()
+    Config.AutoRare = not Config.AutoRare
+    setBtn(AutoRareBtn, Config.AutoRare)
+    if Config.AutoRare then
+        rebuildCache()
+        notify("Auto Mythic/Secret ON - esperando spawn")
+    else
+        notify("Auto Mythic/Secret OFF")
+    end
+end)
+
+-- AIMLOCK / BAT / ANTI / FLING / ESP (iguais v10, resumidos)
 local function getClosestPlayer(range)
     local root = getRoot(getChar())
     if not root then return nil end
@@ -783,7 +910,6 @@ AimBox.FocusLost:Connect(function()
     if v and v > 0 then Config.AimRange = v else AimBox.Text = tostring(Config.AimRange) end
 end)
 
--- BAT
 local originalHandles = {}
 local function enlargeBat(tool, on)
     if not tool then return end
@@ -830,7 +956,6 @@ BatBox.FocusLost:Connect(function()
     if v and v > 0 then Config.BatRange = v else BatBox.Text = tostring(Config.BatRange) end
 end)
 
--- ANTI
 local originalSizes, antiConn = {}, nil
 local function applyHitbox(char, small)
     local root = getRoot(char)
@@ -928,7 +1053,6 @@ FlingBtn.MouseButton1Click:Connect(function()
     end
 end)
 
--- ESP
 local ESPFolder = Instance.new("Folder", SG)
 ESPFolder.Name = "ESP"
 local function clearESP() ESPFolder:ClearAllChildren() end
@@ -978,21 +1102,12 @@ local function makeESP(plr)
         if my then dist.Text = math.floor((my.Position - root.Position).Magnitude) .. "m" end
     end)
 end
-local function refreshESP()
-    clearESP()
-    if Config.ESP then for _, p in pairs(Players:GetPlayers()) do makeESP(p) end end
-end
 ESPBtn.MouseButton1Click:Connect(function()
-    if Config.ESP then refreshESP() else clearESP() end
+    if Config.ESP then
+        clearESP()
+        for _, p in pairs(Players:GetPlayers()) do makeESP(p) end
+    else clearESP() end
 end)
-Players.PlayerAdded:Connect(function(p)
-    p.CharacterAdded:Connect(function() task.wait(0.4) if Config.ESP then makeESP(p) end end)
-end)
-for _, p in pairs(Players:GetPlayers()) do
-    if p ~= LP then
-        p.CharacterAdded:Connect(function() task.wait(0.4) if Config.ESP then makeESP(p) end end)
-    end
-end
 
 LP.CharacterAdded:Connect(function()
     task.wait(0.5)
@@ -1008,5 +1123,5 @@ UIS.InputBegan:Connect(function(inp, gpe)
     if inp.KeyCode == Enum.KeyCode.RightControl then Main.Visible = not Main.Visible end
 end)
 
-print("[StealEggHub v10] cache + auto return")
-notify("v10: sem freeze + Auto-TP ao roubar")
+print("[StealEggHub v11] Auto Mythic/Secret")
+notify("Ligue Auto Mythic/Secret e espere o spawn")
