@@ -1,11 +1,10 @@
--- [[ STEAL A EGG HUB v9 ]] --
--- Areas pre-set + tween deslizante (anti-kill) + Ocean
+-- [[ STEAL A EGG HUB v10 ]] --
+-- TP otimizado (sem freeze) + Auto-TP volta ao pegar ovo
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
-local TweenService = game:GetService("TweenService")
 
 local LP = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -18,12 +17,11 @@ local Config = {
     Aimlock = false, AimRange = 80,
     BatAura = false, BatRange = 18,
     SelectedArea = "Ocean",
-    AutoSteal = false,
-    StealDelay = 1.0,
-    TweenSpeed = 140, -- studs por segundo (deslize)
+    AutoReturn = false, -- auto volta quando detecta ovo
+    HopStuds = 40,      -- distancia de cada saltinho
+    HopDelay = 0.08,   -- tempo entre saltos (menor = mais rapido, maior = mais seguro)
 }
 
--- Areas do mapa (ordem: base -> longe)
 local AreaList = {
     {name = "Forest", keys = {"Forest", "Floresta"}},
     {name = "Lake", keys = {"Lake", "Lago"}},
@@ -32,12 +30,12 @@ local AreaList = {
     {name = "Snow", keys = {"Snow", "Neve"}},
     {name = "Volcano", keys = {"Volcano", "Vulcao", "Vulcão"}},
     {name = "Ocean", keys = {"Ocean", "Abyss", "Mar", "Sea", "Abismo"}},
-    {name = "Prehistoric", keys = {"Prehistoric", "Pre-historico", "Pré"}},
-    {name = "Cosmic", keys = {"Cosmic", "Cosmico", "Cósmico"}},
-    {name = "Cherry", keys = {"Cherry", "Blossom", "Cerejeira"}},
-    {name = "Titan", keys = {"Titan", "Temple", "Templo"}},
+    {name = "Prehistoric", keys = {"Prehistoric", "Pre-historico"}},
+    {name = "Cosmic", keys = {"Cosmic", "Cosmico"}},
+    {name = "Cherry", keys = {"Cherry", "Blossom"}},
+    {name = "Titan", keys = {"Titan", "Temple"}},
     {name = "Monkey", keys = {"Monkey", "Macaco", "Gorilla"}},
-    {name = "Angels", keys = {"Angels", "Angel", "Anjo", "Demons", "Demon"}},
+    {name = "Angels", keys = {"Angels", "Angel", "Anjo", "Demons"}},
 }
 
 -- ==================== GUI ====================
@@ -47,8 +45,7 @@ SG.ResetOnSpawn = false
 SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SG.Parent = game:GetService("CoreGui")
 
-local MIN_W, MIN_H = 280, 300
-local MAX_W, MAX_H = 560, 740
+local MIN_W, MIN_H, MAX_W, MAX_H = 280, 300, 560, 740
 
 local Main = Instance.new("Frame")
 Main.Size = UDim2.new(0, 340, 0, 460)
@@ -79,7 +76,7 @@ local Title = Instance.new("TextLabel", Header)
 Title.Size = UDim2.new(1, -40, 1, 0)
 Title.Position = UDim2.new(0, 12, 0, 0)
 Title.BackgroundTransparency = 1
-Title.Text = "♡ STEAL A EGG HUB v9 ♡"
+Title.Text = "♡ STEAL A EGG HUB v10 ♡"
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 14
 Title.TextColor3 = Color3.new(1, 1, 1)
@@ -127,9 +124,9 @@ Scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 Scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 Scroll.ScrollingDirection = Enum.ScrollingDirection.Y
 
-Instance.new("UIListLayout", Scroll).Padding = UDim.new(0, 8)
-local layout = Scroll:FindFirstChildOfClass("UIListLayout")
+local layout = Instance.new("UIListLayout", Scroll)
 layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(0, 8)
 
 local Pad = Instance.new("UIPadding", Scroll)
 Pad.PaddingTop = UDim.new(0, 4)
@@ -141,7 +138,7 @@ local Status = Instance.new("TextLabel", Main)
 Status.Size = UDim2.new(1, -40, 0, 20)
 Status.Position = UDim2.new(0, 10, 1, -24)
 Status.BackgroundTransparency = 1
-Status.Text = "Clique a area | Deslizar = menos kill"
+Status.Text = "v10: TP leve + Auto Volta"
 Status.Font = Enum.Font.Gotham
 Status.TextSize = 10
 Status.TextColor3 = Color3.fromRGB(140, 140, 140)
@@ -254,15 +251,10 @@ end
 
 local function notify(msg)
     Status.Text = tostring(msg)
-    pcall(function()
-        game:GetService("StarterGui"):SetCore("SendNotification", {
-            Title = "Steal Egg Hub", Text = msg, Duration = 3
-        })
-    end)
 end
 
 -- SPEED
-local S1 = section("Velocidade (sem limite)", 68)
+local S1 = section("Velocidade", 68)
 local SpeedBtn = toggle(S1, 5)
 local SpeedBox = box(S1, Config.SpeedVal, "Valor", 34)
 
@@ -273,9 +265,9 @@ local S3 = section("Super Jump", 68)
 local JumpBtn = toggle(S3, 5)
 local JumpBox = box(S3, Config.JumpPower, "Pulo", 34)
 
--- AREAS PRE-SET
+-- AREAS
 local areaSectionH = 28 + math.ceil(#AreaList / 3) * 30 + 8
-local SArea = section("Selecionar Area (clique)", areaSectionH)
+local SArea = section("Area (clique)", areaSectionH)
 local SelectedLabel = Instance.new("TextLabel", SArea)
 SelectedLabel.Size = UDim2.new(1, -16, 0, 18)
 SelectedLabel.Position = UDim2.new(0, 8, 0, 4)
@@ -315,30 +307,25 @@ for i, info in ipairs(AreaList) do
     b.TextColor3 = Color3.new(1, 1, 1)
     Instance.new("UICorner", b).CornerRadius = UDim.new(0, 5)
     areaButtons[info.name] = b
-    b.MouseButton1Click:Connect(function()
-        selectArea(info.name)
-    end)
+    b.MouseButton1Click:Connect(function() selectArea(info.name) end)
 end
 selectArea(Config.SelectedArea)
 
--- TP ACTIONS
-local S4 = section("Ir / Voltar (deslizar)", 160)
-local TweenBox = box(S4, Config.TweenSpeed, "Velocidade do deslize (studs/s)", 28)
-local GoEggBtn = btn(S4, "Ir ao Ovo (deslizar)", 60)
-local GoBaseBtn = btn(S4, "Voltar Base (deslizar)", 92)
-local SaveBaseBtn = btn(S4, "Salvar Base Aqui", 124)
-
-local SAuto = section("Auto Steal", 48)
-local AutoStealBtn = toggle(SAuto, 14)
-local AutoLabel = Instance.new("TextLabel", SAuto)
-AutoLabel.Size = UDim2.new(0.6, 0, 0, 20)
-AutoLabel.Position = UDim2.new(0, 8, 0, 14)
-AutoLabel.BackgroundTransparency = 1
-AutoLabel.Text = "Auto (desliza)"
-AutoLabel.Font = Enum.Font.Gotham
-AutoLabel.TextSize = 12
-AutoLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
-AutoLabel.TextXAlignment = Enum.TextXAlignment.Left
+-- TP
+local S4 = section("TP / Auto Volta", 168)
+local GoEggBtn = btn(S4, "Ir ao Ovo (saltinhos)", 28)
+local GoBaseBtn = btn(S4, "Voltar Base (saltinhos)", 60)
+local SaveBaseBtn = btn(S4, "Salvar Base Aqui", 92)
+local AutoReturnBtn = toggle(S4, 128)
+local AutoReturnLabel = Instance.new("TextLabel", S4)
+AutoReturnLabel.Size = UDim2.new(0.65, 0, 0, 20)
+AutoReturnLabel.Position = UDim2.new(0, 8, 0, 128)
+AutoReturnLabel.BackgroundTransparency = 1
+AutoReturnLabel.Text = "Auto-TP ao roubar ovo"
+AutoReturnLabel.Font = Enum.Font.Gotham
+AutoReturnLabel.TextSize = 12
+AutoReturnLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+AutoReturnLabel.TextXAlignment = Enum.TextXAlignment.Left
 
 local S5 = section("Aimlock", 68)
 local AimBtn = toggle(S5, 5)
@@ -403,7 +390,6 @@ SpeedBtn.MouseButton1Click:Connect(function()
     local hum = getHum(getChar())
     if hum then hum.WalkSpeed = Config.Speed and Config.SpeedVal or 16 end
 end)
-
 SpeedBox.FocusLost:Connect(function()
     local v = tonumber(SpeedBox.Text)
     if v and v > 0 then Config.SpeedVal = v else SpeedBox.Text = tostring(Config.SpeedVal) end
@@ -416,7 +402,6 @@ local function setNoclip(char, on)
         if p:IsA("BasePart") then p.CanCollide = not on end
     end
 end
-
 NoclipBtn.MouseButton1Click:Connect(function()
     Config.Noclip = not Config.Noclip
     setBtn(NoclipBtn, Config.Noclip)
@@ -441,48 +426,24 @@ local function applyJump()
         pcall(function() hum.JumpPower = 50 hum.JumpHeight = 7.2 end)
     end
 end
-
-RunService.Heartbeat:Connect(function()
-    if Config.SuperJump then applyJump() end
-end)
-
+RunService.Heartbeat:Connect(function() if Config.SuperJump then applyJump() end end)
 JumpBtn.MouseButton1Click:Connect(function()
     Config.SuperJump = not Config.SuperJump
     setBtn(JumpBtn, Config.SuperJump)
     applyJump()
 end)
-
 JumpBox.FocusLost:Connect(function()
     local v = tonumber(JumpBox.Text)
     if v and v > 0 then Config.JumpPower = v if Config.SuperJump then applyJump() end
     else JumpBox.Text = tostring(Config.JumpPower) end
 end)
 
-TweenBox.FocusLost:Connect(function()
-    local v = tonumber(TweenBox.Text)
-    if v and v > 10 then Config.TweenSpeed = v TweenBox.Text = tostring(v)
-    else TweenBox.Text = tostring(Config.TweenSpeed) end
-end)
-
--- ==================== TWEEN / SLIDE MOVE ====================
+-- ==================== CACHE (evita freeze) ====================
 local savedBase = nil
-local moving = false
-local cancelMove = false
-
-local function captureBase()
-    local root = getRoot(getChar())
-    if root then savedBase = root.CFrame end
-end
-
-local function findBaseCFrame()
-    if savedBase then return savedBase end
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if obj:IsA("SpawnLocation") then return obj.CFrame + Vector3.new(0, 4, 0) end
-    end
-    local root = getRoot(getChar())
-    if root then savedBase = root.CFrame return savedBase end
-    return nil
-end
+local waypointCache = {} -- name -> Vector3
+local eggCache = {}      -- {pos, obj}
+local lastCacheTime = 0
+local CACHE_TTL = 8 -- segundos
 
 local function nameHas(str, needle)
     return string.find(string.lower(str or ""), string.lower(needle or ""), 1, true) ~= nil
@@ -490,265 +451,303 @@ end
 
 local function getPart(obj)
     if obj:IsA("BasePart") then return obj end
-    if obj:IsA("Model") then return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart") end
+    if obj:IsA("Model") then return obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart", true) end
     return nil
 end
 
--- Desliza o personagem ate o CFrame (varios segmentos curtos)
-local function slideTo(targetCF)
+local function captureBase()
     local root = getRoot(getChar())
-    if not root or not targetCF then return false end
+    if root then savedBase = root.Position end
+end
 
-    moving = true
-    cancelMove = false
+local function rebuildCache()
+    waypointCache = {}
+    eggCache = {}
+    lastCacheTime = tick()
+
+    -- scan UMA vez so
+    for _, obj in pairs(workspace:GetDescendants()) do
+        local n = obj.Name
+        -- waypoints de area
+        for _, area in ipairs(AreaList) do
+            if not waypointCache[area.name] then
+                for _, key in ipairs(area.keys) do
+                    if nameHas(n, key) then
+                        local part = getPart(obj)
+                        if part then
+                            waypointCache[area.name] = part.Position + Vector3.new(0, 4, 0)
+                            break
+                        end
+                    end
+                end
+            end
+        end
+        -- ovos
+        local isEgg = nameHas(n, "egg")
+        if not isEgg and (obj:IsA("Model") or obj:IsA("BasePart")) then
+            for _, d in pairs(obj:GetChildren()) do
+                if d:IsA("ProximityPrompt") then
+                    local t = (d.ActionText or "") .. (d.ObjectText or "")
+                    if nameHas(t, "egg") or nameHas(t, "steal") or nameHas(t, "grab") then
+                        isEgg = true
+                        break
+                    end
+                end
+            end
+        end
+        if isEgg then
+            local part = getPart(obj)
+            if part then
+                table.insert(eggCache, {pos = part.Position, obj = obj, part = part})
+            end
+        end
+    end
+    notify("Cache: " .. #eggCache .. " ovos | areas ok")
+end
+
+local function ensureCache()
+    if tick() - lastCacheTime > CACHE_TTL or next(waypointCache) == nil then
+        rebuildCache()
+    end
+end
+
+local function getBasePos()
+    if savedBase then return savedBase end
+    for _, obj in pairs(workspace:GetChildren()) do
+        if obj:IsA("SpawnLocation") then return obj.Position + Vector3.new(0, 4, 0) end
+    end
+    local root = getRoot(getChar())
+    return root and root.Position or nil
+end
+
+-- ==================== HOP MOVE (leve, sem freeze) ====================
+local hopping = false
+local hopToken = 0
+
+local function hopTo(targetPos)
+    local root = getRoot(getChar())
+    if not root or not targetPos then return false end
+
+    hopToken += 1
+    local myToken = hopToken
+    hopping = true
 
     local start = root.Position
-    local goal = targetCF.Position
-    local dist = (goal - start).Magnitude
-    if dist < 1 then
-        root.CFrame = targetCF
-        moving = false
+    local dist = (targetPos - start).Magnitude
+    if dist < 3 then
+        root.CFrame = CFrame.new(targetPos)
+        hopping = false
         return true
     end
 
-    -- quantos segmentos (saltos curtos ao longo do caminho)
-    local stepSize = 25 -- studs por micro-salto
-    local steps = math.max(1, math.ceil(dist / stepSize))
-    local timePerStud = 1 / math.max(Config.TweenSpeed, 10)
+    local step = Config.HopStuds
+    local steps = math.max(1, math.ceil(dist / step))
+    -- limita steps pra nao travar
+    steps = math.min(steps, 60)
 
     for i = 1, steps do
-        if cancelMove then moving = false return false end
+        if hopToken ~= myToken then hopping = false return false end
         root = getRoot(getChar())
-        if not root then moving = false return false end
+        if not root then hopping = false return false end
 
         local alpha = i / steps
-        local pos = start:Lerp(goal, alpha)
-        -- sobe um pouco no meio do caminho pra nao prender no chao
-        local lift = math.sin(alpha * math.pi) * 2
-        root.CFrame = CFrame.new(pos + Vector3.new(0, lift, 0))
+        local pos = start:Lerp(targetPos, alpha)
+        root.CFrame = CFrame.new(pos + Vector3.new(0, 1.5, 0))
         root.AssemblyLinearVelocity = Vector3.zero
         root.AssemblyAngularVelocity = Vector3.zero
-
-        task.wait(stepSize * timePerStud)
+        task.wait(Config.HopDelay)
     end
 
     root = getRoot(getChar())
     if root then
-        root.CFrame = targetCF
+        root.CFrame = CFrame.new(targetPos)
         root.AssemblyLinearVelocity = Vector3.zero
     end
-    moving = false
+    hopping = false
     return true
 end
 
--- Waypoints de area
-local function findAreaWaypoint(areaName)
-    local info
-    for _, a in ipairs(AreaList) do
-        if a.name == areaName then info = a break end
+local function hopAlongPath(points)
+    for _, p in ipairs(points) do
+        if not hopTo(p) then return false end
     end
-    local keys = info and info.keys or {areaName}
-
-    for _, key in ipairs(keys) do
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if nameHas(obj.Name, key) then
-                local part = getPart(obj)
-                if part then return part.CFrame + Vector3.new(0, 4, 0) end
-            end
-        end
-    end
-    return nil
+    return true
 end
 
-local function getAreaIndex(name)
-    for i, a in ipairs(AreaList) do
-        if a.name == name then return i end
-        for _, k in ipairs(a.keys) do
-            if nameHas(name, k) then return i end
-        end
-    end
-    return 1
-end
-
-local function getNearestAreaIndex()
+local function buildPathToBase()
+    ensureCache()
     local root = getRoot(getChar())
-    if not root then return 1 end
-    local best, bestD = 1, math.huge
-    for i, a in ipairs(AreaList) do
-        local wp = findAreaWaypoint(a.name)
-        if wp then
-            local d = (root.Position - wp.Position).Magnitude
-            if d < bestD then bestD = d best = i end
+    if not root then return {} end
+
+    local fromPos = root.Position
+    local base = getBasePos()
+    if not base then return {} end
+
+    -- ordena waypoints pela distancia ate a base (mais longe primeiro se estamos longe)
+    local wps = {}
+    for name, pos in pairs(waypointCache) do
+        table.insert(wps, {name = name, pos = pos, dBase = (pos - base).Magnitude})
+    end
+    table.sort(wps, function(a, b) return a.dBase > b.dBase end)
+
+    -- pega so waypoints entre o player e a base
+    local myDist = (fromPos - base).Magnitude
+    local path = {}
+    for _, w in ipairs(wps) do
+        if w.dBase < myDist - 20 and w.dBase > 15 then
+            table.insert(path, w.pos)
+        end
+    end
+    -- ordena path: do mais longe do base pro mais perto
+    table.sort(path, function(a, b)
+        return (a - base).Magnitude > (b - base).Magnitude
+    end)
+    table.insert(path, base)
+    return path
+end
+
+local function findEggInSelectedArea()
+    ensureCache()
+    local area
+    for _, a in ipairs(AreaList) do
+        if a.name == Config.SelectedArea then area = a break end
+    end
+    local keys = area and area.keys or {Config.SelectedArea}
+
+    local root = getRoot(getChar())
+    local best, bestD = nil, math.huge
+
+    for _, e in ipairs(eggCache) do
+        if e.part and e.part.Parent then
+            local match = false
+            local cur = e.obj
+            for _ = 1, 8 do
+                if not cur then break end
+                for _, k in ipairs(keys) do
+                    if nameHas(cur.Name, k) then match = true break end
+                end
+                if match then break end
+                cur = cur.Parent
+            end
+            if match or #eggCache < 5 then
+                local d = root and (root.Position - e.pos).Magnitude or 0
+                if d < bestD then bestD = d best = e end
+            end
         end
     end
     return best
 end
 
--- Desliza passando pelas areas intermediarias
-local function slideThroughAreas(fromIdx, toIdx, finallyBase)
-    if moving then notify("Ja esta se movendo...") return end
+local function goToEgg()
+    if hopping then notify("Aguarde o TP atual") return end
     task.spawn(function()
-        moving = true
-        local step = fromIdx <= toIdx and 1 or -1
-        for i = fromIdx, toIdx, step do
-            if cancelMove then break end
-            local wp = findAreaWaypoint(AreaList[i].name)
-            if wp then
-                notify("Deslizando: " .. AreaList[i].name)
-                moving = false -- slideTo controla
-                slideTo(wp)
-                moving = true
-            end
-        end
-        if finallyBase and not cancelMove then
-            local base = findBaseCFrame()
-            if base then
-                notify("Deslizando ate a base...")
-                moving = false
-                slideTo(base)
-                notify("Na base")
-            end
-        end
-        moving = false
-    end)
-end
-
-local function goToSelectedEgg()
-    if moving then notify("Aguarde o movimento atual") return end
-    task.spawn(function()
-        local targetIdx = getAreaIndex(Config.SelectedArea)
-        local fromIdx = getNearestAreaIndex()
-        -- desliza ate a area
-        slideThroughAreas(fromIdx, targetIdx, false)
-        -- espera terminar
-        while moving do task.wait(0.1) end
-        if cancelMove then return end
-
-        local egg = pickEggForArea(Config.SelectedArea)
+        ensureCache()
+        local egg = findEggInSelectedArea()
         if not egg then
-            notify("Ovo nao encontrado em " .. Config.SelectedArea)
+            rebuildCache()
+            egg = findEggInSelectedArea()
+        end
+        if not egg then
+            notify("Ovo nao encontrado - tente outra area")
             return
         end
-        notify("Deslizando ate o ovo...")
-        slideTo(egg.part.CFrame + Vector3.new(0, 3, 0))
-        -- tenta prompt
-        for _, d in pairs(egg.obj:GetDescendants()) do
-            if d:IsA("ProximityPrompt") then
-                pcall(function() fireproximityprompt(d) end)
-            end
-        end
-        notify("No ovo: " .. egg.obj.Name)
-    end)
-end
-
-local function goSafeBase()
-    if moving then notify("Aguarde...") return end
-    local fromIdx = getNearestAreaIndex()
-    slideThroughAreas(fromIdx, 1, true)
-end
-
--- Eggs
-local function isEggLike(obj)
-    if nameHas(obj.Name, "egg") then return true end
-    if obj:GetAttribute("Egg") or obj:GetAttribute("IsEgg") then return true end
-    if obj:IsA("Model") or obj:IsA("BasePart") then
-        for _, d in pairs(obj:GetDescendants()) do
-            if d:IsA("ProximityPrompt") then
-                local t = (d.ActionText or "") .. (d.ObjectText or "")
-                if nameHas(t, "egg") or nameHas(t, "steal") or nameHas(t, "grab") or nameHas(t, "pick") then
-                    return true
+        notify("Indo ao ovo (" .. Config.SelectedArea .. ")...")
+        -- caminho: waypoints ate a area + ovo
+        local path = {}
+        local wp = waypointCache[Config.SelectedArea]
+        if wp then table.insert(path, wp) end
+        table.insert(path, egg.pos + Vector3.new(0, 3, 0))
+        hopAlongPath(path)
+        -- prompt
+        if egg.obj then
+            for _, d in pairs(egg.obj:GetDescendants()) do
+                if d:IsA("ProximityPrompt") then
+                    pcall(function() fireproximityprompt(d) end)
                 end
             end
         end
+        notify("Chegou no ovo")
+    end)
+end
+
+local function goToBase()
+    if hopping then notify("Aguarde o TP atual") return end
+    task.spawn(function()
+        notify("Voltando com saltinhos...")
+        local path = buildPathToBase()
+        if #path == 0 then
+            local base = getBasePos()
+            if base then hopTo(base) end
+        else
+            hopAlongPath(path)
+        end
+        notify("Na base")
+    end)
+end
+
+-- ==================== AUTO-TP AO ROUBAR OVO ====================
+local wasCarrying = false
+
+local function isCarryingEgg()
+    local char = getChar()
+    if not char then return false end
+    -- tool/model com egg no personagem
+    for _, c in pairs(char:GetChildren()) do
+        if nameHas(c.Name, "egg") then return true end
+    end
+    -- atributos comuns
+    if char:GetAttribute("Carrying") or char:GetAttribute("HasEgg") or char:GetAttribute("HoldingEgg") then
+        return true
+    end
+    local hum = getHum(char)
+    if hum then
+        for _, t in pairs(char:GetChildren()) do
+            if t:IsA("Tool") and nameHas(t.Name, "egg") then return true end
+        end
+    end
+    -- backpack
+    local bp = LP:FindFirstChild("Backpack")
+    if bp then
+        for _, t in pairs(bp:GetChildren()) do
+            if nameHas(t.Name, "egg") then return true end
+        end
     end
     return false
 end
 
-local function eggInArea(obj, areaName)
-    local info
-    for _, a in ipairs(AreaList) do
-        if a.name == areaName then info = a break end
+-- detecta mudanca: nao tinha ovo -> tem ovo = acabou de roubar
+RunService.Heartbeat:Connect(function()
+    if not Config.AutoReturn then
+        wasCarrying = isCarryingEgg()
+        return
     end
-    local keys = info and info.keys or {areaName}
-    local cur = obj
-    for _ = 1, 10 do
-        if not cur then break end
-        for _, k in ipairs(keys) do
-            if nameHas(cur.Name, k) then return true end
-        end
-        cur = cur.Parent
+    local carrying = isCarryingEgg()
+    if carrying and not wasCarrying and not hopping then
+        notify("Ovo detectado! Auto-TP base...")
+        goToBase()
     end
-    local ok, path = pcall(function() return obj:GetFullName() end)
-    if ok then
-        for _, k in ipairs(keys) do
-            if nameHas(path, k) then return true end
-        end
-    end
-    return false
-end
-
-function pickEggForArea(areaName)
-    local list = {}
-    for _, obj in pairs(workspace:GetDescendants()) do
-        if isEggLike(obj) and eggInArea(obj, areaName) then
-            local part = getPart(obj)
-            if part then table.insert(list, {obj = obj, part = part}) end
-        end
-    end
-    if #list == 0 then
-        -- fallback qualquer ovo
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if isEggLike(obj) then
-                local part = getPart(obj)
-                if part then table.insert(list, {obj = obj, part = part}) end
-            end
-        end
-        if #list == 0 then return nil end
-        notify("Usando ovo generico")
-    end
-    local root = getRoot(getChar())
-    local best, bestD = nil, math.huge
-    for _, e in pairs(list) do
-        local d = root and (root.Position - e.part.Position).Magnitude or 0
-        if d < bestD then bestD = d best = e end
-    end
-    return best
-end
+    wasCarrying = carrying
+end)
 
 task.defer(function()
     task.wait(1)
     captureBase()
-    if savedBase then notify("Base salva - escolha a area e va ao ovo") end
+    rebuildCache()
+    notify("Pronto - salve a base e escolha a area")
 end)
 
-GoEggBtn.MouseButton1Click:Connect(goToSelectedEgg)
-GoBaseBtn.MouseButton1Click:Connect(goSafeBase)
+GoEggBtn.MouseButton1Click:Connect(goToEgg)
+GoBaseBtn.MouseButton1Click:Connect(goToBase)
 SaveBaseBtn.MouseButton1Click:Connect(function()
     captureBase()
-    notify("Base salva aqui")
+    rebuildCache()
+    notify("Base + cache salvos")
 end)
 
-local function autoLoop()
-    while Config.AutoSteal do
-        goToSelectedEgg()
-        while moving do task.wait(0.15) end
-        task.wait(Config.StealDelay)
-        goSafeBase()
-        while moving do task.wait(0.15) end
-        task.wait(Config.StealDelay)
-    end
-end
-
-AutoStealBtn.MouseButton1Click:Connect(function()
-    Config.AutoSteal = not Config.AutoSteal
-    setBtn(AutoStealBtn, Config.AutoSteal)
-    if Config.AutoSteal then
-        notify("Auto Steal ON (" .. Config.SelectedArea .. ")")
-        task.spawn(autoLoop)
-    else
-        cancelMove = true
-        notify("Auto Steal OFF")
-    end
+AutoReturnBtn.MouseButton1Click:Connect(function()
+    Config.AutoReturn = not Config.AutoReturn
+    setBtn(AutoReturnBtn, Config.AutoReturn)
+    notify(Config.AutoReturn and "Auto-TP ao roubar: ON" or "Auto-TP ao roubar: OFF")
 end)
 
 -- AIMLOCK
@@ -768,7 +767,6 @@ local function getClosestPlayer(range)
     end
     return closest
 end
-
 RunService.RenderStepped:Connect(function()
     if not Config.Aimlock then return end
     local t = getClosestPlayer(Config.AimRange)
@@ -776,7 +774,6 @@ RunService.RenderStepped:Connect(function()
         Camera.CFrame = CFrame.new(Camera.CFrame.Position, t.Character.Head.Position)
     end
 end)
-
 AimBtn.MouseButton1Click:Connect(function()
     Config.Aimlock = not Config.Aimlock
     setBtn(AimBtn, Config.Aimlock)
@@ -999,6 +996,7 @@ end
 
 LP.CharacterAdded:Connect(function()
     task.wait(0.5)
+    wasCarrying = false
     if Config.Speed then local h = getHum(getChar()) if h then h.WalkSpeed = Config.SpeedVal end end
     if Config.Noclip then setNoclip(getChar(), true) end
     if Config.SuperJump then applyJump() end
@@ -1010,5 +1008,5 @@ UIS.InputBegan:Connect(function(inp, gpe)
     if inp.KeyCode == Enum.KeyCode.RightControl then Main.Visible = not Main.Visible end
 end)
 
-print("[StealEggHub v9] areas pre-set + tween deslizante")
-notify("v9: clique a area (Ocean etc) e deslize ate o ovo")
+print("[StealEggHub v10] cache + auto return")
+notify("v10: sem freeze + Auto-TP ao roubar")

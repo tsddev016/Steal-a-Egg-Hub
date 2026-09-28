@@ -1,15 +1,13 @@
-# ♡ Steal a Egg Hub v9 ♡
+# Steal a Egg Hub v10
 
-## Novidades
-- **Areas pre-set**: clica no botao (Forest, Lake, Ocean, Angels...)
-- **Movimento deslizante (Tween)**: vai ate o ovo/base sem TP seco (menos kill)
-- **Ocean / Abyss** incluido
-- Scroll + resize na GUI
+## Correcoes
+- TP **nao trava** mais o jogo (cache + menos scan)
+- **Auto-TP volta**: ao roubar o ovo, comeca saltinhos ate a base sozinho
+- Areas pre-set (clique)
+- Ocean incluido
 
-## Como roubar
-1. Clica a **area** (ex: Ocean)
-2. Clica **Ir ao Ovo (deslizar)**
-3. Pega o ovo
-4. Clica **Voltar Base (deslizar)**
-
-Ou liga **Auto Steal**.
+## Uso rapido
+1. Salvar Base Aqui
+2. Clicar a area (ex: Ocean)
+3. Ir ao Ovo
+4. Ligar **Auto Volta** → quando pegar o ovo, volta sozinho
