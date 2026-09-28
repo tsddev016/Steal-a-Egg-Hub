@@ -2,24 +2,28 @@
 
 Script para **Steal a Egg** (Roblox).
 
-## Features
+## Por que não tem Fly?
+
+O anti-cheat do jogo **mata na hora** que você sobe no ar.
+Por isso o Fly foi removido e trocado por coisas que não disparam isso:
 
 - **Velocidade** — loop constante
-- **Fly (Swim)** — servidor vê como se o player estivesse **nadando**
-- **ESP Visual**
-- **Anti-Taco** — anti-ragdoll + hitbox menor + intangível
+- **Noclip** — atravessa paredes (sem voar)
+- **Super Jump** — pula alto (sem flutuar)
+- **ESP**
+- **Anti-Taco** — anti-ragdoll + hitbox menor
 - **Fling**
 
-## Fly (modo nadar)
+## Controles
 
-Em vez de BodyVelocity/voar normal, o script força o estado **Swimming** do Humanoid.
-Pro servidor parece que você está nadando — não voando.
-
-Controles: **WASD** + **Space** (sobe) + **LeftShift** (desce)
-
-## Como usar
-
-1. Executor → cola `StealEggHub.lua` → executa
-2. `RightControl` abre/fecha a GUI
+| Função      | Como usar                |
+|-------------|--------------------------|
+| Velocidade  | Toggle + valor           |
+| Noclip      | Toggle (atravessa tudo)  |
+| Super Jump  | Toggle + valor do pulo   |
+| ESP         | Toggle                   |
+| Anti-Taco   | Toggle                   |
+| Fling       | Toggle (encosta = voa)   |
+| GUI         | RightControl             |
 
 Use por sua conta e risco.
