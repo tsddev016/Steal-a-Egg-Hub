@@ -1,19 +1,18 @@
--- [[ STEAL A EGG HUB v14 ]] --
--- Anti-Taco SEM flutuar | TP curto | Anti-AFK
+-- [[ STEAL A EGG HUB v15 ]] --
+-- Ir ao ovo = clique | Auto-voltar base = ON/OFF | TP rapido | Anti-AFK
 
 local Players = game:GetService("Players")
 local VirtualUser = game:GetService("VirtualUser")
 local RunService = game:GetService("RunService")
 local LP = Players.LocalPlayer
 
--- ==================== ANTI-AFK ====================
+-- Anti-AFK
 LP.Idled:Connect(function()
     pcall(function()
         VirtualUser:CaptureController()
         VirtualUser:ClickButton2(Vector2.new())
     end)
 end)
-
 task.spawn(function()
     while true do
         pcall(function()
@@ -23,134 +22,193 @@ task.spawn(function()
         task.wait(60)
     end
 end)
-
 print("[StealEggHub] Anti-AFK ON")
 
--- ==================== HUB ====================
+-- Carrega hub + patches
 local ok, err = pcall(function()
     local src = game:HttpGet("https://raw.githubusercontent.com/tsddev016/Steal-a-Egg-Hub/2e502fb766cab88e6f7d16d8201f7302b88a5624/StealEggHub.lua")
 
-    -- TP curto e rapido
+    -- TP: saltos curtos e MAIS RAPIDOS
     src = src:gsub("HopStuds = 40", "HopStuds = 5")
-    src = src:gsub("HopDelay = 0%.08", "HopDelay = 0.015")
-    src = src:gsub("math%.min%(math%.max%(1, math%.ceil%(dist / step%)%), 60%)", "math.min(math.max(1, math.ceil(dist / step)), 250)")
+    src = src:gsub("HopDelay = 0%.08", "HopDelay = 0.008") -- bem mais rapido
+    src = src:gsub(
+        "math%.min%(math%.max%(1, math%.ceil%(dist / step%)%), 60%)",
+        "math.min(math.max(1, math.ceil(dist / step)), 300)"
+    )
 
-    -- Anti-Taco: NAO encolher root / NAO desligar CanCollide (isso deixava no ar)
+    -- Anti-Taco sem flutuar
+    src = src:gsub("root%.Size = Vector3%.new%(0%.4, 0%.4, 0%.4%)", "-- keep size")
+    src = src:gsub("root%.Transparency = 1", "-- keep")
+    src = src:gsub("root%.CanCollide = false", "root.CanCollide = true")
     src = src:gsub(
-        "root%.Size = Vector3%.new%(0%.4, 0%.4, 0%.4%)", 
-        "-- root size keep"
-    )
-    src = src:gsub(
-        "root%.Transparency = 1", 
-        "-- no transparency"
-    )
-    src = src:gsub(
-        "root%.CanCollide = false", 
-        "root.CanCollide = true -- manter no chao"
-    )
-    -- nao desligar colisao do corpo inteiro
-    src = src:gsub(
-        "p%.CanCollide = not %(small or Config%.Noclip%)", 
-        "if not Config.Noclip then p.CanCollide = true end -- anti-taco nao tira colisao"
-    )
-    src = src:gsub(
-        "p%.CanCollide = not %(small or Config%.Noclip%)", 
+        "p%.CanCollide = not %(small or Config%.Noclip%)",
         "if not Config.Noclip then p.CanCollide = true end"
     )
 
-    local fn, compileErr = loadstring(src)
-    if not fn then error(compileErr or "loadstring falhou") end
+    -- AutoReturn ja existe no hub (toggle "Auto-TP ao roubar")
+    -- Garante que nasce OFF e o usuario liga
+    src = src:gsub("AutoReturn = false", "AutoReturn = false")
+
+    local fn, e = loadstring(src)
+    if not fn then error(e or "loadstring") end
     fn()
 end)
 
 if not ok then
-    warn("[StealEggHub] Erro hub:", err)
+    warn("[StealEggHub] hub:", err)
 else
-    print("[StealEggHub v14] carregado")
+    print("[StealEggHub v15] hub OK")
 end
 
--- ==================== ANTI-TACO SEGURO (extra) ====================
--- So tira ragdoll / knockback absurdo. Nao mexe em colisao.
-local antiOn = false
+-- ==================== AUTO VOLTAR BASE (ON/OFF reforcado) ====================
+local autoBack = false
+local wasCarrying = false
+local goingBack = false
 
 local function getChar() return LP.Character end
-local function getHum(c) return c and c:FindFirstChildOfClass("Humanoid") end
 local function getRoot(c) return c and c:FindFirstChild("HumanoidRootPart") end
 
-RunService.Heartbeat:Connect(function()
-    if not antiOn then return end
+local function nameHas(str, needle)
+    return string.find(string.lower(str or ""), string.lower(needle or ""), 1, true) ~= nil
+end
+
+local function isCarryingEgg()
     local char = getChar()
-    local hum = getHum(char)
-    local root = getRoot(char)
-    if not hum or not root then return end
+    if not char then return false end
+    if char:GetAttribute("Carrying") or char:GetAttribute("HasEgg") or char:GetAttribute("HoldingEgg") then
+        return true
+    end
+    for _, c in pairs(char:GetChildren()) do
+        if nameHas(c.Name, "egg") then return true end
+        if c:IsA("Tool") and (nameHas(c.Name, "egg") or nameHas(c.Name, "steal")) then return true end
+    end
+    local bp = LP:FindFirstChild("Backpack")
+    if bp then
+        for _, t in pairs(bp:GetChildren()) do
+            if nameHas(t.Name, "egg") then return true end
+        end
+    end
+    -- alguns jogos usam ObjectValue / model no character
+    for _, c in pairs(char:GetDescendants()) do
+        if c:IsA("Model") and nameHas(c.Name, "egg") then return true end
+        if c:IsA("StringValue") and nameHas(c.Value, "egg") then return true end
+    end
+    return false
+end
 
-    -- nunca ficar PlatformStand / ragdoll
-    if hum.PlatformStand then hum.PlatformStand = false end
-    if hum.Sit then hum.Sit = false end
+-- procura o botao "Voltar Base" e "Auto-TP" na GUI e reforca comportamento
+task.spawn(function()
+    task.wait(2.5)
+    local sg = game:GetService("CoreGui"):FindFirstChild("StealEggHub")
+    if not sg then return end
 
-    local st = hum:GetState()
-    if st == Enum.HumanoidStateType.Ragdoll
-        or st == Enum.HumanoidStateType.FallingDown
-        or st == Enum.HumanoidStateType.Physics then
-        hum:ChangeState(Enum.HumanoidStateType.Running)
+    for _, b in pairs(sg:GetDescendants()) do
+        if b:IsA("TextButton") then
+            local t = b.Text or ""
+            -- Auto-TP ao roubar (ja e toggle ON/OFF no hub)
+            if t:find("Auto") or t:find("ao roubar") then
+                -- deixa como esta
+            end
+            -- se clicar em Voltar Base com nosso autoBack, so volta uma vez (manual ainda funciona)
+        end
     end
 
-    -- so corta knockback absurdo do taco (nao trava movimento normal)
-    local v = root.AssemblyLinearVelocity
-    if v.Magnitude > 150 then
-        root.AssemblyLinearVelocity = Vector3.new(v.X * 0.3, math.min(v.Y, 40), v.Z * 0.3)
-    end
+    -- cria toggle extra claro na GUI se existir o Main
+    local main = sg:FindFirstChild("Main") or sg:FindFirstChildWhichIsA("Frame")
+    if main then
+        local scroll = main:FindFirstChildWhichIsA("ScrollingFrame", true)
+        local parent = scroll or main
 
-    -- garante pe no chao (colisao do root)
-    if not root.CanCollide then
-        root.CanCollide = true
+        local f = Instance.new("Frame")
+        f.Size = UDim2.new(1, -12, 0, 44)
+        f.BackgroundColor3 = Color3.fromRGB(30, 50, 30)
+        f.BorderSizePixel = 0
+        f.LayoutOrder = 0
+        f.Parent = parent
+        Instance.new("UICorner", f).CornerRadius = UDim.new(0, 8)
+
+        local lab = Instance.new("TextLabel", f)
+        lab.Size = UDim2.new(0.7, 0, 1, 0)
+        lab.Position = UDim2.new(0, 8, 0, 0)
+        lab.BackgroundTransparency = 1
+        lab.Text = "AUTO VOLTAR BASE (com ovo)"
+        lab.Font = Enum.Font.GothamBold
+        lab.TextSize = 11
+        lab.TextColor3 = Color3.fromRGB(180, 255, 180)
+        lab.TextXAlignment = Enum.TextXAlignment.Left
+
+        local btn = Instance.new("TextButton", f)
+        btn.Size = UDim2.new(0, 60, 0, 24)
+        btn.Position = UDim2.new(1, -70, 0.5, -12)
+        btn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        btn.Text = "OFF"
+        btn.Font = Enum.Font.GothamBold
+        btn.TextSize = 11
+        btn.TextColor3 = Color3.fromRGB(255, 100, 100)
+        Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
+
+        btn.MouseButton1Click:Connect(function()
+            autoBack = not autoBack
+            btn.Text = autoBack and "ON" or "OFF"
+            btn.TextColor3 = autoBack and Color3.fromRGB(100, 255, 120) or Color3.fromRGB(255, 100, 100)
+            pcall(function()
+                game:GetService("StarterGui"):SetCore("SendNotification", {
+                    Title = "Steal Egg Hub",
+                    Text = autoBack and "Auto voltar BASE: ON (quando pegar ovo)" or "Auto voltar BASE: OFF",
+                    Duration = 3
+                })
+            end)
+        end)
     end
 end)
 
--- tenta ligar junto quando o botao AntiTaco da GUI e clicado
-task.spawn(function()
-    task.wait(2)
-    local sg = game:GetService("CoreGui"):FindFirstChild("StealEggHub")
-    if not sg then return end
-    for _, b in pairs(sg:GetDescendants()) do
-        if b:IsA("TextButton") and (b.Text == "AntiTaco" or b.Text:find("AntiTaco")) then
-            b.MouseButton1Click:Connect(function()
-                task.wait(0.05)
-                -- alterna nosso anti seguro
-                antiOn = not antiOn
-                local hum = getHum(getChar())
-                if hum then
-                    pcall(function()
-                        hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, not antiOn)
-                        hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, not antiOn)
-                        hum:SetStateEnabled(Enum.HumanoidStateType.Physics, not antiOn)
-                    end)
-                end
-                -- desfaz qualquer hitbox quebrada
-                local char = getChar()
-                if char then
-                    local root = getRoot(char)
-                    if root then
-                        root.CanCollide = true
-                        root.Transparency = 1 -- root normal invisivel
-                    end
-                    for _, p in pairs(char:GetDescendants()) do
-                        if p:IsA("BasePart") and p.Name ~= "HumanoidRootPart" then
-                            -- nao forcar false
+-- quando detectar ovo e autoBack ON -> clica o botao Voltar Base da GUI (ou avisa)
+RunService.Heartbeat:Connect(function()
+    if not autoBack then
+        wasCarrying = isCarryingEgg()
+        return
+    end
+    local carrying = isCarryingEgg()
+    if carrying and not wasCarrying and not goingBack then
+        goingBack = true
+        pcall(function()
+            game:GetService("StarterGui"):SetCore("SendNotification", {
+                Title = "Ovo pego!",
+                Text = "Voltando pra base...",
+                Duration = 3
+            })
+        end)
+        -- dispara o botao "Voltar Base" da GUI
+        task.spawn(function()
+            local sg = game:GetService("CoreGui"):FindFirstChild("StealEggHub")
+            if sg then
+                for _, b in pairs(sg:GetDescendants()) do
+                    if b:IsA("TextButton") then
+                        local t = string.lower(b.Text or "")
+                        if t:find("voltar") or t:find("base") then
+                            if t:find("voltar") or t:find("tp base") or t:find("base (salt") then
+                                pcall(function() b:Activate() end)
+                                -- fallback click
+                                pcall(function()
+                                    firesignal(b.MouseButton1Click)
+                                end)
+                                break
+                            end
                         end
                     end
                 end
-                print("[Anti-Taco seguro]", antiOn and "ON" or "OFF")
-            end)
-            break
-        end
+            end
+            task.wait(8)
+            goingBack = false
+        end)
     end
+    wasCarrying = carrying
 end)
 
 pcall(function()
     game:GetService("StarterGui"):SetCore("SendNotification", {
-        Title = "Steal Egg Hub v14",
-        Text = "Anti-Taco corrigido (sem flutuar)",
-        Duration = 4
+        Title = "Steal Egg Hub v15",
+        Text = "Ir ovo = clique | Auto base = ON/OFF | TP mais rapido",
+        Duration = 5
     })
 end)
